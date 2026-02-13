@@ -6,12 +6,6 @@ import { Chess, Square } from 'chess.js';
  * CHESS BOARD REPLICA COMPONENT
  */
 
-interface MoveHighlight {
-  from: string;
-  to: string;
-  rank: number; // 0 for best, 1 for secondary
-}
-
 interface ChessBoardDisplayProps {
   fen: string;
   bestMoves?: { from: string; to: string }[];
@@ -58,6 +52,24 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
     }
   }, [fen]);
 
+  // Identify "Hanging" or Under-Pressure pieces
+  const threats = useMemo(() => {
+    const dangerSquares: string[] = [];
+    const board = game.board();
+    board.forEach((row, r) => {
+        row.forEach((piece, c) => {
+            if (piece) {
+                const square = `${String.fromCharCode(97 + c)}${8 - r}`;
+                // Simplified threat check: Is the square attacked by the enemy?
+                if (game.isAttacked(square as Square, piece.color === 'w' ? 'b' : 'w')) {
+                    dangerSquares.push(square);
+                }
+            }
+        });
+    });
+    return dangerSquares;
+  }, [game]);
+
   const handleSquareClick = (squareId: string) => {
     if (!onManualMove) return;
     if (selectedSquare && possibleMoves.includes(squareId)) {
@@ -84,14 +96,13 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
 
   return (
     <div className="aspect-square w-full bg-slate-900 rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[12px] border-slate-800 select-none">
-      <div className="grid grid-cols-8 grid-rows-8 w-full h-full">
+      <div className="grid grid-cols-8 grid-rows-8 w-full h-full relative">
         {displayRanks.map((rank, rankIndex) => (
           displayFiles.map((file, fileIndex) => {
             const isLight = (rankIndex + fileIndex) % 2 === 0;
             const squareId = `${file}${rank}`;
             const piece = game.get(squareId as Square);
 
-            // Determine if this square is part of any best move suggestion
             const bestMoveRank = bestMoves.findIndex(m => m.from === squareId || m.to === squareId);
             const moveAtThisSquare = bestMoves.find(m => m.from === squareId || m.to === squareId);
             const isFrom = moveAtThisSquare?.from === squareId;
@@ -100,9 +111,10 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
             const isSelected = selectedSquare === squareId;
             const isPossibleMove = possibleMoves.includes(squareId);
             
-            // Opponent move highlights
             const isOpponentFrom = lastOpponentMove?.from === squareId;
             const isOpponentTo = lastOpponentMove?.to === squareId;
+            
+            const isInDanger = threats.includes(squareId);
 
             return (
               <div 
@@ -110,8 +122,12 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                 className={`${isLight ? 'bg-[#334155]' : 'bg-[#1e293b]'} relative flex items-center justify-center cursor-pointer transition-colors duration-300`}
                 onClick={() => handleSquareClick(squareId)}
               >
-                {/* Visual Overlays for AI/Selection */}
-                {/* Rank 0 (Best Move) - Stronger Highlight */}
+                {/* Threat Indicator */}
+                {isInDanger && piece && (
+                    <div className="absolute inset-0 bg-red-500/10 animate-pulse border border-red-500/20 z-0" />
+                )}
+
+                {/* Best Moves */}
                 {bestMoveRank === 0 && (
                   <>
                     {isFrom && <div className="absolute inset-0 bg-blue-500/30" />}
@@ -119,7 +135,6 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                   </>
                 )}
                 
-                {/* Rank 1 (Second Best) - Subtle/Darker Highlight */}
                 {bestMoveRank === 1 && (
                   <>
                     {isFrom && <div className="absolute inset-0 bg-blue-500/10" />}
@@ -127,18 +142,17 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                   </>
                 )}
                 
-                {/* Opponent Last Move Overlays */}
                 {isOpponentFrom && <div className="absolute inset-0 bg-rose-500/20" />}
                 {isOpponentTo && <div className="absolute inset-0 bg-rose-500/30 animate-pulse border-2 border-rose-500/40" />}
                 
                 {isSelected && <div className="absolute inset-0 bg-amber-500/40" />}
                 {isPossibleMove && <div className="absolute w-3 h-3 bg-white/10 rounded-full" />}
 
-                {/* Coordinate Labels */}
+                {/* Coordinates */}
                 {fileIndex === 0 && <span className="absolute top-0.5 left-1 text-[8px] font-black text-slate-500 opacity-50">{rank}</span>}
                 {rankIndex === 7 && <span className="absolute bottom-0.5 right-1 text-[8px] font-black text-slate-500 opacity-50">{file.toUpperCase()}</span>}
 
-                {/* PIECE RENDERING */}
+                {/* Pieces */}
                 {piece && (
                   <img 
                     src={PIECE_IMAGES[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]} 

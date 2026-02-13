@@ -16,18 +16,15 @@
       }
       .font-mono { font-family: 'JetBrains Mono', monospace; }
       .eval-bar-bg { background: linear-gradient(180deg, #ffffff 0%, #000000 100%); }
-      .glow-emerald { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
-      .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(51, 65, 85, 0.5); }
+      .glow-blue { box-shadow: 0 0 15px rgba(59, 130, 246, 0.4); }
+      .glass { background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(51, 65, 85, 0.4); }
       
-      @keyframes pulse-emerald {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-      }
-      .animate-scan { animation: scan 2s linear infinite; }
       @keyframes scan {
         0% { transform: translateY(-100%); }
         100% { transform: translateY(100%); }
       }
+      .animate-scan { animation: scan 3s linear infinite; }
+      
       .vertical-text {
         writing-mode: vertical-rl;
         transform: rotate(180deg);
@@ -40,7 +37,7 @@
         background: rgba(255, 255, 255, 0.02);
       }
       .custom-scrollbar::-webkit-scrollbar-thumb {
-        background: rgba(16, 185, 129, 0.2);
+        background: rgba(59, 130, 246, 0.3);
         border-radius: 10px;
       }
     </style>

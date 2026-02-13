@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (CHESSVISIONX OPTIMIZED)
- * PURPOSE: Robustly identifies the chess board within a potentially cluttered full-screen capture.
+ * VISION SERVICE (MAGNUS VISION CORE)
+ * PURPOSE: Robustly identifies the chess board within a cluttered screen capture.
  */
 
 export interface VisionResult {
@@ -13,7 +13,7 @@ export interface VisionResult {
 }
 
 export const analyzeBoardVision = async (base64Image: string): Promise<VisionResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   try {
     const response = await ai.models.generateContent({
@@ -21,21 +21,16 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       contents: {
         parts: [
           {
-            text: `You are the Vision Engine for ChessVisionX.
+            text: `ACT AS: Magnus Vision Core.
+            TASK: Extract FEN from this screen capture.
             
-            IMAGE CONTEXT: This is a full-screen screenshot which may include browser tabs, sidebars, and desktop UI.
-            
-            STRICT INSTRUCTIONS:
-            1. SCAN the image for the main 8x8 chess board. It is likely the largest square feature.
-            2. CROP MENTALLY: Ignore all elements outside the 8x8 board (no clocks, no chat, no browser URL).
-            3. PIECE IDENTIFICATION:
-               - White pieces (Uppercase): K, Q, R, B, N, P
-               - Black pieces (Lowercase): k, q, r, b, n, p
-            4. PERSPECTIVE: Identify if White or Black is at the bottom of the board.
-            5. TURN DETECTION: Look for highlight squares (often yellow/green) indicating the last move, or turn indicators next to avatars.
-            6. FEN OUTPUT: Construct a valid 6-part FEN. Ensure it represents exactly what is on the board.
-            
-            Format your response as valid JSON with "fen" and "bottomColor".`
+            1. SCAN: Look for the 8x8 chess board.
+            2. FOCUS: Ignore all external UI (tabs, sidebar, desktop).
+            3. PIECE MAP: 
+               - Upper (White): K, Q, R, B, N, P
+               - Lower (Black): k, q, r, b, n, p
+            4. PERSPECTIVE: Determine if "white" or "black" is at the bottom.
+            5. RESPONSE: Return ONLY a JSON object with keys "fen" and "bottomColor". No extra text. No markdown blocks.`
           },
           {
             inlineData: {
@@ -52,12 +47,12 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
           properties: {
             fen: {
               type: Type.STRING,
-              description: 'The standard Forsyth-Edwards Notation string.',
+              description: 'Complete 6-part FEN string.',
             },
             bottomColor: {
               type: Type.STRING,
               enum: ['white', 'black'],
-              description: 'The color perspective at the bottom of the screen.',
+              description: 'Color perspective at bottom.',
             },
           },
           required: ["fen", "bottomColor"],
@@ -65,14 +60,15 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       },
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Empty response from Magnus Vision Core.");
+    const rawText = response.text;
+    if (!rawText) throw new Error("Null response from vision core.");
 
-    const result = JSON.parse(text.trim());
+    // Clean any potential markdown wrapping
+    const cleanedJson = rawText.replace(/```json|```/g, "").trim();
+    const result = JSON.parse(cleanedJson);
     
-    // Validate FEN structure
     if (!result.fen || result.fen.split('/').length < 8) {
-      throw new Error("Invalid board mapping received.");
+      throw new Error("Invalid FEN data.");
     }
 
     return result as VisionResult;
@@ -81,7 +77,7 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
     return { 
       fen: "", 
       bottomColor: 'white', 
-      error: error.message || "Vision synchronization failed." 
+      error: error.message || "Mapping failure." 
     };
   }
 };
