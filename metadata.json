@@ -1,7 +1,8 @@
 {
-  "name": "Copy of Vanguard Precision HUD",
-  "description": "100% Offline Tactical Chess Assistant. Replicates your board from the screen and calculates top moves locally using Stockfish 16.1 WASM.",
+  "name": "Vanguard Precision HUD",
+  "description": "Tactical Chess Assistant. Replicates your board from the screen and calculates top moves locally using Stockfish 16.1 WASM.",
   "requestFramePermissions": [
-    "display-capture"
+    "display-capture",
+    "camera"
   ]
 }
