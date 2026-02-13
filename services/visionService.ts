@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (MAGNUS VISION CORE 2.9)
- * PURPOSE: Robust FEN extraction from screen captures.
+ * VISION SERVICE (MAGNUS VISION CORE 3.0)
+ * Optimized for Mirroring Piece Movements in Real-Time
  */
 
 export interface VisionResult {
@@ -19,13 +19,12 @@ export interface VisionResult {
 }
 
 export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean = false): Promise<VisionResult> => {
-  // Always retrieve the latest key from the process environment
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey === "undefined" || apiKey === "") {
     return { 
       fen: "", 
       bottomColor: 'white', 
-      error: "API Key Not Detected. Please authorize via 'Connect API Key' in the top right header." 
+      error: "No active API Key. Please click 'Connect API Key' in the HUD header." 
     };
   }
 
@@ -37,19 +36,18 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
       contents: {
         parts: [
           {
-            text: `ACT AS: Magnus Vision Core 2.9.
-            TASK: Map the real-time board from this capture.
+            text: `ACT AS: Magnus Vision Engine 3.0.
+            TASK: Map the exact piece locations from the provided screen capture.
             
-            RULES:
-            1. SCAN: Focus exclusively on the 8x8 chess board.
-            2. COORDINATES: Provide the [ymin, xmin, ymax, xmax] of the 8x8 board square (0-1000).
-            3. PIECES: Identify every piece exactly. 
-               - White pieces are CAPITAL (K, Q, R, B, N, P).
-               - Black pieces are lowercase (k, q, r, b, n, p).
-            4. PERSPECTIVE: Identify which side is at the bottom (white or black).
-            5. FEN: Generate the complete 6-part FEN string.
+            DIRECTIONS:
+            1. PIECES: Identify every piece precisely. This is for a real-time replica.
+               - CAPITAL = White pieces
+               - lowercase = Black pieces
+            2. FOCUS: Find the 8x8 chess board. Provide its [ymin, xmin, ymax, xmax] coordinates (0-1000).
+            3. PERSPECTIVE: Which color is at the bottom of the board?
+            4. FEN: Generate the complete FEN string based ONLY on the visual state of the pieces.
             
-            OUTPUT: RETURN ONLY VALID JSON. NO MARKDOWN.`
+            JSON OUTPUT ONLY.`
           },
           {
             inlineData: {
@@ -83,19 +81,19 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
     });
 
     const rawText = response.text;
-    if (!rawText) throw new Error("Neural core returned empty response.");
+    if (!rawText) throw new Error("Neural response timeout.");
 
     const match = rawText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Neural output format mismatch.");
+    if (!match) throw new Error("JSON Parse Error.");
     
     const result = JSON.parse(match[0]);
     if (!result.fen || result.fen.split('/').length < 8) {
-       throw new Error("Neural position incomplete.");
+       throw new Error("FEN incomplete.");
     }
 
     return result as VisionResult;
   } catch (error: any) {
-    console.error("Magnus Vision Error:", error);
+    console.error("Vision Sync Failure:", error);
     return { 
       fen: "", 
       bottomColor: 'white', 
