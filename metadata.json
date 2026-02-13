@@ -1,8 +1,7 @@
 {
-  "name": "ChessVisionX",
-  "description": "Professional Tactical Chess HUD. Synchronizes your real-time board state and provides Magnus Intelligence 2.6 analysis.",
   "requestFramePermissions": [
-    "display-capture",
     "camera"
-  ]
+  ],
+  "name": "",
+  "description": ""
 }

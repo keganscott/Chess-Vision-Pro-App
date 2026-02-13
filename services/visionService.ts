@@ -2,18 +2,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (MAGNUS VISION CORE)
- * PURPOSE: Robustly identifies the chess board within a cluttered screen capture.
+ * VISION SERVICE (MAGNUS VISION CORE 2.7)
+ * PURPOSE: High-speed FEN extraction from screen captures.
  */
 
 export interface VisionResult {
   fen: string;
   bottomColor: 'white' | 'black';
+  boundingBox?: {
+    ymin: number;
+    xmin: number;
+    ymax: number;
+    xmax: number;
+  };
   error?: string;
 }
 
-export const analyzeBoardVision = async (base64Image: string): Promise<VisionResult> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean = false): Promise<VisionResult> => {
+  // Directly using injected key as per system requirements
+  const apiKey = process.env.API_KEY;
+  const ai = new GoogleGenAI({ apiKey: apiKey || "" });
   
   try {
     const response = await ai.models.generateContent({
@@ -21,16 +29,16 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       contents: {
         parts: [
           {
-            text: `ACT AS: Magnus Vision Core.
-            TASK: Extract FEN from this screen capture.
+            text: `ACT AS: Magnus Vision Core 2.7.
+            TASK: Map the chess board state from this capture.
             
-            1. SCAN: Look for the 8x8 chess board.
-            2. FOCUS: Ignore all external UI (tabs, sidebar, desktop).
-            3. PIECE MAP: 
-               - Upper (White): K, Q, R, B, N, P
-               - Lower (Black): k, q, r, b, n, p
-            4. PERSPECTIVE: Determine if "white" or "black" is at the bottom.
-            5. RESPONSE: Return ONLY a JSON object with keys "fen" and "bottomColor". No extra text. No markdown blocks.`
+            STRICT RULES:
+            1. SCAN: Find the main 8x8 grid. Ignore external browser elements.
+            2. COORDINATES: Provide the bounding box [ymin, xmin, ymax, xmax] (0-1000).
+            3. PERSPECTIVE: Identify if "white" or "black" pieces are at the bottom.
+            4. FEN: Generate the complete FEN string. Double-check piece positions.
+            
+            OUTPUT: RETURN ONLY VALID JSON. NO MARKDOWN. NO CONVERSATION.`
           },
           {
             inlineData: {
@@ -45,15 +53,18 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            fen: {
-              type: Type.STRING,
-              description: 'Complete 6-part FEN string.',
-            },
-            bottomColor: {
-              type: Type.STRING,
-              enum: ['white', 'black'],
-              description: 'Color perspective at bottom.',
-            },
+            fen: { type: Type.STRING },
+            bottomColor: { type: Type.STRING, enum: ['white', 'black'] },
+            boundingBox: {
+              type: Type.OBJECT,
+              properties: {
+                ymin: { type: Type.NUMBER },
+                xmin: { type: Type.NUMBER },
+                ymax: { type: Type.NUMBER },
+                xmax: { type: Type.NUMBER },
+              },
+              required: ["ymin", "xmin", "ymax", "xmax"],
+            }
           },
           required: ["fen", "bottomColor"],
         },
@@ -61,19 +72,18 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
     });
 
     const rawText = response.text;
-    if (!rawText) throw new Error("Null response from vision core.");
+    if (!rawText) throw new Error("Vision engine returned no data.");
 
-    // Clean any potential markdown wrapping
-    const cleanedJson = rawText.replace(/```json|```/g, "").trim();
-    const result = JSON.parse(cleanedJson);
+    // Aggressive JSON extraction
+    const match = rawText.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("Neural output was not in JSON format.");
     
-    if (!result.fen || result.fen.split('/').length < 8) {
-      throw new Error("Invalid FEN data.");
-    }
+    const result = JSON.parse(match[0]);
+    if (!result.fen) throw new Error("FEN mapping failed.");
 
     return result as VisionResult;
   } catch (error: any) {
-    console.error("ChessVisionX Vision Error:", error);
+    console.error("Vision Bridge Failure:", error);
     return { 
       fen: "", 
       bottomColor: 'white', 

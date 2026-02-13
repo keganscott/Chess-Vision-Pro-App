@@ -1,9 +1,8 @@
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
-  Zap, Activity, Settings2, Target, Clock, 
-  ShieldCheck, ChevronRight, Scan, RefreshCcw, Trophy,
-  AlertTriangle, CheckCircle2, Maximize2
+  Zap, Activity, Settings2, ShieldCheck, ChevronRight, Scan, RefreshCcw, Trophy,
+  AlertTriangle, CheckCircle2, Maximize2, Crop
 } from 'lucide-react';
 import { Chess } from 'chess.js';
 import CameraFeed from './components/CameraFeed';
@@ -13,8 +12,7 @@ import { analyzeBoardVision } from './services/visionService';
 import { INITIAL_FEN } from './types';
 
 /**
- * CHESSVISIONX PRO HUD
- * PROCESSOR: MAGNUS INTELLIGENCE 2.6
+ * CHESSVISIONX - Magnus Intelligence 2.7
  */
 
 export default function App() {
@@ -26,43 +24,32 @@ export default function App() {
   const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(true);
   const [lastVisionError, setLastVisionError] = useState<string | null>(null);
   const [visionSuccessCount, setVisionSuccessCount] = useState(0);
+  const [activeCrop, setActiveCrop] = useState<{ ymin: number; xmin: number; ymax: number; xmax: number } | null>(null);
   
   const [lastOpponentMove, setLastOpponentMove] = useState<{ from: string; to: string } | null>(null);
-  
   const gameRef = useRef(new Chess(INITIAL_FEN));
   const visionCooldown = useRef<boolean>(false);
 
-  // Determine local player's turn status
   const isUserTurn = useCallback(() => {
-    const fenParts = currentFen.split(' ');
-    const turn = fenParts[1] || 'w'; 
+    const turn = currentFen.split(' ')[1] || 'w'; 
     return (turn === 'w' && boardOrientation === 'white') || 
            (turn === 'b' && boardOrientation === 'black');
   }, [currentFen, boardOrientation]);
 
-  /**
-   * Identifies moves based on FEN changes
-   */
   const detectMove = (oldFen: string, newFen: string) => {
     try {
         const tempGame = new Chess(oldFen);
-        const oldPos = oldFen.split(' ')[0];
-        const newPos = newFen.split(' ')[0];
-        if (oldPos === newPos) return null;
-
+        if (oldFen.split(' ')[0] === newFen.split(' ')[0]) return null;
         const moves = tempGame.moves({ verbose: true });
         for (const move of moves) {
           tempGame.move(move);
-          if (tempGame.fen().split(' ')[0] === newPos) return { from: move.from, to: move.to };
+          if (tempGame.fen().split(' ')[0] === newFen.split(' ')[0]) return { from: move.from, to: move.to };
           tempGame.undo();
         }
     } catch (e) {}
     return null;
   };
 
-  /**
-   * MAIN CAPTURE LOOP
-   */
   const handleFrameCapture = useCallback(async (base64: string) => {
     if (visionCooldown.current || !isAutoSyncEnabled) return;
     
@@ -70,7 +57,7 @@ export default function App() {
     setIsVisionSyncing(true);
 
     try {
-      const result = await analyzeBoardVision(base64);
+      const result = await analyzeBoardVision(base64, !!activeCrop);
       
       if (result.error) {
         setLastVisionError(result.error);
@@ -81,11 +68,13 @@ export default function App() {
       setVisionSuccessCount(prev => prev + 1);
 
       // Orientation Adjustment
-      if (result.bottomColor !== boardOrientation) {
-        setBoardOrientation(result.bottomColor);
+      if (result.bottomColor !== boardOrientation) setBoardOrientation(result.bottomColor);
+
+      // Smart Crop Capture
+      if (result.boundingBox && !activeCrop) {
+        setActiveCrop(result.boundingBox);
       }
 
-      // Board Content Adjustment
       const newPos = result.fen.split(' ')[0];
       const currentPos = currentFen.split(' ')[0];
 
@@ -95,28 +84,22 @@ export default function App() {
         const isNowUserTurn = (newTurn === 'w' && result.bottomColor === 'white') || 
                               (newTurn === 'b' && result.bottomColor === 'black');
         
-        if (move && isNowUserTurn) {
-          setLastOpponentMove(move);
-        } else {
-          setLastOpponentMove(null);
-        }
+        if (move && isNowUserTurn) setLastOpponentMove(move);
+        else setLastOpponentMove(null);
 
-        // FORCE STATE UPDATE
+        // SYNC STATE
         setCurrentFen(result.fen);
         gameRef.current = new Chess(result.fen);
       }
     } catch (e: any) {
-      setLastVisionError(e.message || "Engine Link Lost");
+      setLastVisionError(e.message || "Engine Sync Lost");
     } finally {
       setIsVisionSyncing(false);
-      // Interval for stability: 2s
-      setTimeout(() => { visionCooldown.current = false; }, 2000);
+      // Fast sync for real-time feel: 1.5s
+      setTimeout(() => { visionCooldown.current = false; }, 1500);
     }
-  }, [currentFen, boardOrientation, isAutoSyncEnabled]);
+  }, [currentFen, boardOrientation, isAutoSyncEnabled, activeCrop]);
 
-  /**
-   * MAGNUS INTELLIGENCE 2.6 CALCULATION
-   */
   useEffect(() => {
     if (isUserTurn()) {
       setIsEngineThinking(true);
@@ -150,6 +133,7 @@ export default function App() {
     setLastOpponentMove(null);
     setLastVisionError(null);
     setVisionSuccessCount(0);
+    setActiveCrop(null);
   };
 
   const boardMoves = engineResult?.moves.map(m => ({ 
@@ -159,7 +143,6 @@ export default function App() {
 
   return (
     <div className="h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
-      {/* HEADER SECTION */}
       <header className="h-14 glass flex items-center justify-between px-6 border-b border-white/5 relative z-50">
         <div className="flex items-center gap-4">
           <div className="p-1.5 bg-blue-600 rounded-md shadow-[0_0_20px_rgba(37,99,235,0.4)]">
@@ -169,9 +152,9 @@ export default function App() {
             <h1 className="text-sm font-black tracking-tighter uppercase text-white">ChessVisionX</h1>
             <div className="flex items-center gap-2">
               <span className="text-[9px] font-bold text-blue-400 uppercase tracking-widest">
-                Processor: Magnus Intelligence 2.6
+                Processor: Magnus Intelligence 2.7
               </span>
-              <div className={`w-1.5 h-1.5 rounded-full ${isVisionSyncing ? 'bg-blue-400 animate-pulse' : 'bg-blue-600'}`} />
+              <div className={`w-1.5 h-1.5 rounded-full ${isVisionSyncing ? 'bg-blue-400 animate-pulse' : 'bg-blue-600 shadow-[0_0_10px_rgba(37,99,235,0.8)]'}`} />
             </div>
           </div>
         </div>
@@ -183,48 +166,45 @@ export default function App() {
            </div>
            <div className="flex items-center gap-1.5 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">
              <RefreshCcw className={`w-3 h-3 text-blue-500/70 ${isVisionSyncing ? 'animate-spin' : ''}`} />
-             <span>SYNC: {isVisionSyncing ? 'ACTIVE' : 'IDLE'}</span>
+             <span>SYNC: {isVisionSyncing ? 'STREAMING' : 'READY'}</span>
            </div>
         </div>
       </header>
 
-      <main className="flex-1 p-6 grid grid-cols-12 gap-8 overflow-hidden relative">
-        {/* SIDEBAR */}
-        <div className="col-span-4 flex flex-col gap-6 overflow-hidden">
-          {/* CAMERA / SCREEN FEED */}
-          <div className="relative aspect-video glass rounded-2xl overflow-hidden shadow-2xl border border-slate-800/50 group">
+      <main className="flex-1 grid grid-cols-10 overflow-hidden relative">
+        <div className="col-span-4 p-6 flex flex-col gap-6 overflow-hidden border-r border-white/5 bg-slate-900/20">
+          <div className="relative aspect-video glass rounded-2xl overflow-hidden shadow-2xl border border-white/5 group">
              <CameraFeed 
                isAnalyzing={isAutoSyncEnabled} 
                onCaptureFrame={handleFrameCapture} 
                onStreamStatusChange={() => {}} 
+               crop={activeCrop}
              />
              <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2 py-1 bg-black/80 rounded-lg text-[9px] font-black text-slate-300 border border-white/5 uppercase">
                <Scan className={`w-3.5 h-3.5 ${isVisionSyncing ? 'text-blue-400 animate-pulse' : 'text-blue-600'}`} />
-               {isVisionSyncing ? 'Locking FEN...' : 'Scanning Screen...'}
+               {isVisionSyncing ? 'Capturing...' : 'Screen Active'}
              </div>
-             <div className="absolute inset-0 border-2 border-blue-500/0 group-hover:border-blue-500/10 transition-all pointer-events-none" />
           </div>
 
-          {/* ENGINE LIST */}
           <div className="flex-1 glass rounded-2xl p-6 flex flex-col gap-5 overflow-hidden shadow-2xl border border-white/5">
              <div className="flex items-center justify-between border-b border-white/5 pb-4">
                <div className="flex items-center gap-2">
                  <Trophy className="w-4 h-4 text-blue-400" />
-                 <h2 className="text-xs font-black uppercase tracking-widest text-white">Recommended Moves</h2>
+                 <h2 className="text-xs font-black uppercase tracking-widest text-white">Analysis Stack</h2>
                </div>
-               {isEngineThinking && <div className="text-[9px] font-bold text-blue-400 animate-pulse uppercase">Calculating</div>}
+               {isEngineThinking && <div className="text-[9px] font-bold text-blue-400 animate-pulse uppercase">Thinking...</div>}
              </div>
 
-             <div className="flex-1 flex flex-col gap-4 py-2 overflow-y-auto custom-scrollbar">
+             <div className="flex-1 flex flex-col gap-3 py-2 overflow-y-auto custom-scrollbar">
                {engineResult?.moves && engineResult.moves.length > 0 ? (
                  engineResult.moves.map((move, idx) => (
-                   <div key={idx} className={`p-5 rounded-2xl border-2 transition-all ${idx === 0 ? 'bg-blue-600/10 border-blue-600/40 shadow-[0_0_30px_rgba(37,99,235,0.05)]' : 'bg-slate-900/40 border-slate-800'}`}>
+                   <div key={idx} className={`p-4 rounded-2xl border-2 transition-all ${idx === 0 ? 'bg-blue-600/10 border-blue-600/40 shadow-[0_0_30px_rgba(37,99,235,0.05)]' : 'bg-slate-900/40 border-slate-800'}`}>
                       <div className="flex items-center justify-between">
-                        <div className="flex flex-col gap-1">
-                          <span className={`text-[10px] font-black uppercase tracking-widest ${idx === 0 ? 'text-blue-400' : 'text-slate-500'}`}>
-                            {idx === 0 ? 'Best Response' : 'Secondary Line'}
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`text-[9px] font-black uppercase tracking-widest ${idx === 0 ? 'text-blue-400' : 'text-slate-500'}`}>
+                            {idx === 0 ? 'Move Priority #1' : `Priority #${idx + 1}`}
                           </span>
-                          <div className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
+                          <div className="text-2xl font-black text-white tracking-tighter flex items-center gap-3">
                             {move.from} <ChevronRight className="w-4 h-4 text-slate-700" /> {move.to}
                           </div>
                         </div>
@@ -238,23 +218,22 @@ export default function App() {
                  <div className="flex-1 flex flex-col items-center justify-center opacity-20 py-12 space-y-4 text-center">
                     <Maximize2 className="w-16 h-16 animate-pulse" />
                     <p className="text-[10px] font-black uppercase tracking-[0.3em] max-w-[180px]">
-                      {isUserTurn() ? 'Analyzing Board' : 'Awaiting Opponent'}
+                      Awaiting Neural Sync
                     </p>
                  </div>
                )}
              </div>
 
-             {/* VISION LOGS */}
              <div className="p-3 bg-black/40 rounded-xl border border-white/5 text-[9px] font-mono">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-500 uppercase font-black">Magnus Vision Log</span>
-                  {lastVisionError ? <AlertTriangle className="w-3 h-3 text-rose-500" /> : <CheckCircle2 className="w-3 h-3 text-blue-500" />}
+                  <span className="text-slate-500 uppercase font-black tracking-tighter">Magnus Vision Core 2.7</span>
+                  {lastVisionError ? <AlertTriangle className="w-3 h-3 text-rose-500" /> : <CheckCircle2 className="w-3 h-3 text-blue-500 shadow-[0_0_5px_rgba(59,130,246,0.5)]" />}
                 </div>
                 {lastVisionError ? (
-                  <div className="text-rose-400 font-bold break-words leading-tight">SYNC_ERR: {lastVisionError}</div>
+                  <div className="text-rose-400 font-bold break-words leading-tight">ERR: {lastVisionError}</div>
                 ) : (
                   <div className="text-blue-400/80 font-bold">
-                    NOMINAL • {visionSuccessCount} UPDATES • PERSPECTIVE: {boardOrientation.toUpperCase()}
+                    NOMINAL • {visionSuccessCount} MAPS • {activeCrop ? 'CROP: LOCKED' : 'CROP: AUTO'}
                   </div>
                 )}
              </div>
@@ -265,45 +244,52 @@ export default function App() {
                </button>
                <button 
                 onClick={() => setIsAutoSyncEnabled(!isAutoSyncEnabled)}
-                className={`flex-[2] py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg ${isAutoSyncEnabled ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}
+                className={`flex-[2] py-3 rounded-xl text-[10px] font-black uppercase transition-all shadow-lg ${isAutoSyncEnabled ? 'bg-blue-600 text-white shadow-blue-900/20' : 'bg-slate-800 text-slate-400'}`}
                >
-                 {isAutoSyncEnabled ? 'Link Active' : 'Link Paused'}
+                 {isAutoSyncEnabled ? 'Syncing...' : 'Sync Paused'}
                </button>
              </div>
           </div>
         </div>
 
-        {/* MAIN DISPLAY AREA */}
-        <div className="col-span-8 flex items-center justify-center glass rounded-3xl p-10 border border-white/5 shadow-2xl relative overflow-hidden">
-          {/* EVALUATION BAR */}
-          <div className="absolute left-10 top-1/2 -translate-y-1/2 h-[75%] flex flex-col items-center gap-3">
-             <div className="w-2.5 h-full bg-slate-900/80 rounded-full overflow-hidden flex flex-col-reverse border border-white/5">
+        <div className="col-span-6 flex flex-col items-center justify-center p-12 relative overflow-hidden">
+          <div className="absolute left-16 top-1/2 -translate-y-1/2 h-[65%] flex flex-col items-center gap-3">
+             <div className="w-3 h-full bg-slate-900/80 rounded-full overflow-hidden flex flex-col-reverse border border-white/10 p-[1px]">
                 <div 
-                  className="bg-blue-600 transition-all duration-1000 ease-in-out shadow-[0_0_20px_rgba(37,99,235,0.6)]" 
+                  className="bg-blue-500 transition-all duration-1000 ease-in-out shadow-[0_0_20px_rgba(59,130,246,0.6)] rounded-full" 
                   style={{ height: `${Math.max(5, Math.min(95, 50 + (engineResult?.moves[0]?.evaluation || 0) * 8))}%` }} 
                 />
              </div>
-             <div className="text-[8px] font-black text-slate-700 uppercase vertical-text">Advantage</div>
+             <div className="text-[8px] font-black text-slate-600 uppercase vertical-text tracking-[0.2em]">Live Advantage</div>
           </div>
 
-          {/* REPLICA BOARD */}
-          <div className="w-full max-w-[620px] flex flex-col items-center gap-8">
-            <div className="flex items-center justify-between w-full px-2">
+          <div className="w-full max-w-[720px] flex flex-col items-center gap-8">
+            <div className="flex items-center justify-between w-full px-4">
                <div className="flex flex-col">
-                 <h3 className="text-xs font-black uppercase tracking-widest text-white flex items-center gap-2">
-                   Board Replica <div className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
+                 <h3 className="text-[11px] font-black uppercase tracking-[0.3em] text-white flex items-center gap-3">
+                   Replica HUD <div className={`w-2 h-2 rounded-full ${isVisionSyncing ? 'bg-blue-400 animate-ping' : 'bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,1)]'}`} />
                  </h3>
-                 <span className="text-[10px] font-bold text-slate-600 uppercase">Real-Time Screen Mapping</span>
+                 <span className="text-[10px] font-bold text-slate-600 uppercase">Synchronized Visual Bridge</span>
                </div>
-               <button 
-                 onClick={() => setBoardOrientation(p => p === 'white' ? 'black' : 'white')}
-                 className="p-3 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-500 transition-all border border-slate-800"
-               >
-                 <Settings2 className="w-5 h-5" />
-               </button>
+               <div className="flex gap-3">
+                 <button 
+                   onClick={() => setActiveCrop(null)}
+                   className="p-3 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-500 transition-all border border-slate-800"
+                   title="Reset Smart Crop"
+                 >
+                   <Crop className="w-5 h-5" />
+                 </button>
+                 <button 
+                   onClick={() => setBoardOrientation(p => p === 'white' ? 'black' : 'white')}
+                   className="p-3 bg-slate-900 hover:bg-slate-800 rounded-xl text-slate-500 transition-all border border-slate-800"
+                   title="Flip Board"
+                 >
+                   <Settings2 className="w-5 h-5" />
+                 </button>
+               </div>
             </div>
 
-            <div className="w-full relative shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
+            <div className="w-full relative shadow-[0_50px_120px_rgba(0,0,0,0.8)]">
               <ChessBoardDisplay 
                 fen={currentFen} 
                 bestMoves={boardMoves} 
@@ -311,16 +297,16 @@ export default function App() {
                 orientation={boardOrientation} 
                 onManualMove={handleManualMove} 
               />
-              <div className="absolute -top-3 -left-3 w-8 h-8 border-t-2 border-l-2 border-blue-500/20 rounded-tl-lg" />
-              <div className="absolute -bottom-3 -right-3 w-8 h-8 border-b-2 border-r-2 border-blue-500/20 rounded-br-lg" />
+              <div className="absolute -top-4 -left-4 w-12 h-12 border-t-2 border-l-2 border-blue-500/20 rounded-tl-xl" />
+              <div className="absolute -bottom-4 -right-4 w-12 h-12 border-b-2 border-r-2 border-blue-500/20 rounded-br-xl" />
             </div>
 
-            <div className="w-full flex justify-between items-center text-[10px] font-mono text-slate-600">
-              <div className="bg-black/40 px-4 py-2 rounded-lg border border-white/5 truncate max-w-[80%]">
-                MAPPING: {currentFen}
+            <div className="w-full flex justify-between items-center text-[10px] font-mono text-slate-700">
+              <div className="bg-black/60 px-5 py-2.5 rounded-xl border border-white/5 truncate max-w-[80%] text-slate-500">
+                ACTIVE_STATE: {currentFen}
               </div>
               <div className="flex items-center gap-2 text-blue-500/30 font-black uppercase tracking-[0.2em]">
-                <ShieldCheck className="w-3.5 h-3.5" /> Secure Tunnel Active
+                <ShieldCheck className="w-4 h-4" /> SECURE TUNNEL 2.7
               </div>
             </div>
           </div>
