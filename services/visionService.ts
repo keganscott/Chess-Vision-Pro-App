@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
@@ -8,11 +9,10 @@ import { GoogleGenAI, Type } from "@google/genai";
 export interface VisionResult {
   fen: string;
   bottomColor: 'white' | 'black';
+  error?: string;
 }
 
 export const analyzeBoardVision = async (base64Image: string): Promise<VisionResult> => {
-  // We strictly use the SDK initialization as required.
-  // Note: This requires a Google Gemini API Key.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
   
   try {
@@ -21,7 +21,17 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       contents: {
         parts: [
           {
-            text: "Analyze the provided chess board image. Identify all pieces and their exact squares to generate a valid FEN string. Also, determine if the perspective at the bottom of the screen is from the 'white' or 'black' player. Return the result in JSON format."
+            text: `You are a professional chess vision expert. 
+            TASK: 
+            1. Locate the active chess board in this screenshot.
+            2. Analyze every square from a1 to h8.
+            3. Identify the pieces: K=King, Q=Queen, R=Rook, B=Bishop, N=Knight, P=Pawn. 
+               Uppercase for White, Lowercase for Black. Use '/' for rank separators and numbers for empty squares.
+            4. Determine if the perspective at the bottom is 'white' or 'black'.
+            5. Determine whose turn it is (w/b) based on UI indicators like turn clocks or highlight colors. Default to 'w' if unclear.
+            6. Output a standard 6-part FEN string (e.g., 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').
+            
+            Return ONLY a JSON object.`
           },
           {
             inlineData: {
@@ -38,11 +48,11 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
           properties: {
             fen: {
               type: Type.STRING,
-              description: 'The standard Forsyth-Edwards Notation (FEN) for the detected board state.',
+              description: 'The standard Forsyth-Edwards Notation (FEN). Must be valid and complete.',
             },
             bottomColor: {
               type: Type.STRING,
-              description: 'The color of the player at the bottom of the board ("white" or "black").',
+              description: 'Color at bottom: "white" or "black".',
             },
           },
           required: ["fen", "bottomColor"],
@@ -50,15 +60,23 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       },
     });
 
-    // Accessing .text property directly as per coding guidelines.
-    const jsonStr = response.text;
-    if (!jsonStr) {
-      throw new Error("Vanguard Internal: No response data received.");
+    const text = response.text;
+    if (!text) throw new Error("No response from Vision AI.");
+
+    const result = JSON.parse(text.trim());
+    
+    // Basic FEN validation: check for 8 ranks
+    if (!result.fen || result.fen.split('/').length < 8) {
+        throw new Error("Invalid FEN format received.");
     }
 
-    return JSON.parse(jsonStr.trim()) as VisionResult;
-  } catch (error) {
-    console.error("Vanguard Vision Sync Failed:", error);
-    throw error;
+    return result as VisionResult;
+  } catch (error: any) {
+    console.error("Vanguard Vision Error:", error);
+    return { 
+      fen: "", 
+      bottomColor: 'white', 
+      error: error.message || "Unknown vision error" 
+    };
   }
 };

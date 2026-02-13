@@ -1,7 +1,9 @@
+
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
-  Zap, RotateCcw, Activity, Settings2, Target, Clock, 
-  ShieldCheck, ChevronRight, Scan, RefreshCcw, Trophy 
+  Zap, Activity, Settings2, Target, Clock, 
+  ShieldCheck, ChevronRight, Scan, RefreshCcw, Trophy,
+  AlertTriangle, CheckCircle2
 } from 'lucide-react';
 import { Chess } from 'chess.js';
 import CameraFeed from './components/CameraFeed';
@@ -10,10 +12,6 @@ import { engine, EngineResult } from './services/engineService';
 import { analyzeBoardVision } from './services/visionService';
 import { INITIAL_FEN } from './types';
 
-/**
- * VANGUARD PRECISION HUD
- */
-
 export default function App() {
   const [currentFen, setCurrentFen] = useState(INITIAL_FEN);
   const [boardOrientation, setBoardOrientation] = useState<'white' | 'black'>('white');
@@ -21,39 +19,35 @@ export default function App() {
   const [isEngineThinking, setIsEngineThinking] = useState(false);
   const [isVisionSyncing, setIsVisionSyncing] = useState(false);
   const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(true);
+  const [lastVisionError, setLastVisionError] = useState<string | null>(null);
+  const [visionSuccessCount, setVisionSuccessCount] = useState(0);
   
-  // Track the opponent's last move to highlight it on the replica
   const [lastOpponentMove, setLastOpponentMove] = useState<{ from: string; to: string } | null>(null);
   
   const gameRef = useRef(new Chess(INITIAL_FEN));
   const visionCooldown = useRef<boolean>(false);
 
-  // Determine if it's the local user's turn
   const isUserTurn = useCallback(() => {
     const turn = currentFen.split(' ')[1]; 
     return (turn === 'w' && boardOrientation === 'white') || 
            (turn === 'b' && boardOrientation === 'black');
   }, [currentFen, boardOrientation]);
 
-  /**
-   * Detects the move made between two FEN strings
-   */
   const detectMove = (oldFen: string, newFen: string) => {
-    const tempGame = new Chess(oldFen);
-    const moves = tempGame.moves({ verbose: true });
-    for (const move of moves) {
-      tempGame.move(move);
-      if (tempGame.fen() === newFen) {
-        return { from: move.from, to: move.to };
-      }
-      tempGame.undo();
-    }
+    try {
+        const tempGame = new Chess(oldFen);
+        const moves = tempGame.moves({ verbose: true });
+        for (const move of moves) {
+          tempGame.move(move);
+          if (tempGame.fen().split(' ')[0] === newFen.split(' ')[0]) {
+            return { from: move.from, to: move.to };
+          }
+          tempGame.undo();
+        }
+    } catch (e) {}
     return null;
   };
 
-  /**
-   * VISION SYNC HANDLER
-   */
   const handleFrameCapture = useCallback(async (base64: string) => {
     if (visionCooldown.current || !isAutoSyncEnabled) return;
     
@@ -63,44 +57,45 @@ export default function App() {
     try {
       const result = await analyzeBoardVision(base64);
       
+      if (result.error) {
+        setLastVisionError(result.error);
+        return;
+      }
+
+      setLastVisionError(null);
+      setVisionSuccessCount(prev => prev + 1);
+
       if (result.bottomColor !== boardOrientation) {
         setBoardOrientation(result.bottomColor);
       }
 
-      if (result.fen !== currentFen) {
-        // Detect if this change was a move
+      // Check if the board position has actually changed (ignoring turn/clocks etc for basic update)
+      const newBaseFen = result.fen.split(' ')[0];
+      const currentBaseFen = currentFen.split(' ')[0];
+
+      if (newBaseFen !== currentBaseFen) {
         const move = detectMove(currentFen, result.fen);
-        
-        // Split FEN to get turn info
-        const fenParts = result.fen.split(' ');
-        const newTurn = fenParts[1];
-        
-        // isNowUserTurn means the opponent just moved
+        const newTurn = result.fen.split(' ')[1];
         const isNowUserTurn = (newTurn === 'w' && result.bottomColor === 'white') || 
                               (newTurn === 'b' && result.bottomColor === 'black');
         
         if (move && isNowUserTurn) {
-          // If a move happened and it's now our turn, it was the opponent's move
           setLastOpponentMove(move);
         } else {
-          // If it's no longer our turn, or we can't determine the move, clear highlights
           setLastOpponentMove(null);
         }
 
         setCurrentFen(result.fen);
         gameRef.current = new Chess(result.fen);
       }
-    } catch (e) {
-      console.log("HUD Status: Vision processing in background...");
+    } catch (e: any) {
+      setLastVisionError(e.message || "Network Error");
     } finally {
       setIsVisionSyncing(false);
-      setTimeout(() => { visionCooldown.current = false; }, 2000);
+      setTimeout(() => { visionCooldown.current = false; }, 3000); // 3s cooldown for stability
     }
   }, [currentFen, boardOrientation, isAutoSyncEnabled]);
 
-  /**
-   * ENGINE CALCULATION
-   */
   useEffect(() => {
     if (isUserTurn()) {
       setIsEngineThinking(true);
@@ -117,21 +112,14 @@ export default function App() {
     }
   }, [currentFen, isUserTurn]);
 
-  /**
-   * MANUAL MOVE HANDLER
-   * Triggers when the user interacts with the replica board.
-   */
   const handleManualMove = (from: string, to: string) => {
     try {
       const move = gameRef.current.move({ from, to, promotion: 'q' });
       if (move) {
         setCurrentFen(gameRef.current.fen());
-        // USER MOVE DETECTED: Clear opponent highlight immediately
         setLastOpponentMove(null);
       }
-    } catch (e) {
-      console.warn("Manual Move: Invalid path attempted.");
-    }
+    } catch (e) {}
   };
 
   const handleReset = () => {
@@ -139,7 +127,13 @@ export default function App() {
     setCurrentFen(INITIAL_FEN);
     setEngineResult(null);
     setLastOpponentMove(null);
+    setLastVisionError(null);
   };
+
+  const boardMoves = engineResult?.moves.map(m => ({ 
+    from: m.from.toLowerCase(), 
+    to: m.to.toLowerCase() 
+  })) || [];
 
   return (
     <div className="h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
@@ -166,7 +160,7 @@ export default function App() {
            </div>
            <div className="flex items-center gap-1.5 bg-slate-900/50 px-3 py-1 rounded-full border border-slate-800">
              <RefreshCcw className={`w-3 h-3 text-blue-500/70 ${isVisionSyncing ? 'animate-spin' : ''}`} />
-             <span>SYNC: 2.0S</span>
+             <span>SYNC STATUS: {isVisionSyncing ? 'UPDATING' : 'IDLE'}</span>
            </div>
         </div>
       </header>
@@ -183,7 +177,7 @@ export default function App() {
              />
              <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2 py-1 bg-black/80 rounded-lg text-[9px] font-black text-slate-300 border border-white/5 uppercase">
                <Scan className={`w-3.5 h-3.5 ${isVisionSyncing ? 'text-blue-400 animate-pulse' : 'text-emerald-500'}`} />
-               {isVisionSyncing ? 'Capturing Data...' : 'Vision Synced'}
+               {isVisionSyncing ? 'Analyzing Screen...' : 'Monitoring...'}
              </div>
           </div>
 
@@ -199,20 +193,17 @@ export default function App() {
              <div className="flex-1 flex flex-col gap-4 py-2 overflow-y-auto custom-scrollbar">
                {engineResult?.moves && engineResult.moves.length > 0 ? (
                  engineResult.moves.map((move, idx) => (
-                   <div key={idx} className={`p-6 rounded-2xl border-2 transition-all ${idx === 0 ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.1)]' : 'bg-slate-900/40 border-slate-800'}`}>
+                   <div key={idx} className={`p-5 rounded-2xl border-2 transition-all ${idx === 0 ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_30px_rgba(16,185,129,0.1)]' : 'bg-slate-900/40 border-slate-800'}`}>
                       <div className="flex items-center justify-between">
                         <div className="flex flex-col gap-1">
                           <span className={`text-[10px] font-black uppercase tracking-widest ${idx === 0 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                            {idx === 0 ? 'Priority Target' : 'Secondary Line'}
+                            {idx === 0 ? 'Primary Target' : 'Secondary Line'}
                           </span>
-                          <div className="text-4xl font-black text-white tracking-tighter flex items-center gap-4">
-                            {move.from} <ChevronRight className="w-5 h-5 text-slate-700" /> {move.to}
-                          </div>
-                          <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                             Confidence: (({move.confidence}%))
+                          <div className="text-3xl font-black text-white tracking-tighter flex items-center gap-3">
+                            {move.from} <ChevronRight className="w-4 h-4 text-slate-700" /> {move.to}
                           </div>
                         </div>
-                        <div className={`text-xl font-black ${move.evaluation >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        <div className={`text-lg font-black ${move.evaluation >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                           {move.evaluation > 0 ? '+' : ''}{move.evaluation.toFixed(2)}
                         </div>
                       </div>
@@ -226,6 +217,21 @@ export default function App() {
                     </p>
                  </div>
                )}
+             </div>
+
+             {/* Vision Diagnostic Panel */}
+             <div className="p-3 bg-black/40 rounded-xl border border-white/5 text-[9px] font-mono">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-slate-500 uppercase font-black">Vision Intelligence Console</span>
+                  {lastVisionError ? <AlertTriangle className="w-3 h-3 text-rose-500" /> : <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
+                </div>
+                {lastVisionError ? (
+                  <div className="text-rose-400 font-bold break-words">ERROR: {lastVisionError}</div>
+                ) : (
+                  <div className="text-emerald-400/70 font-bold">
+                    ACTIVE SYNC OK • {visionSuccessCount} UPDATES • PERSPECTIVE: {boardOrientation.toUpperCase()}
+                  </div>
+                )}
              </div>
 
              <div className="mt-auto flex items-center gap-4 pt-4 border-t border-white/5">
@@ -272,7 +278,7 @@ export default function App() {
             <div className="w-full relative shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
               <ChessBoardDisplay 
                 fen={currentFen} 
-                bestMove={engineResult?.moves[0]?.san} 
+                bestMoves={boardMoves} 
                 lastOpponentMove={lastOpponentMove}
                 orientation={boardOrientation} 
                 onManualMove={handleManualMove} 

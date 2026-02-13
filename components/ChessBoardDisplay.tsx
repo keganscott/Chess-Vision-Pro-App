@@ -6,9 +6,15 @@ import { Chess, Square } from 'chess.js';
  * CHESS BOARD REPLICA COMPONENT
  */
 
+interface MoveHighlight {
+  from: string;
+  to: string;
+  rank: number; // 0 for best, 1 for secondary
+}
+
 interface ChessBoardDisplayProps {
   fen: string;
-  bestMove?: string;
+  bestMoves?: { from: string; to: string }[];
   lastOpponentMove?: { from: string; to: string } | null;
   orientation?: 'white' | 'black';
   onManualMove?: (from: string, to: string) => void;
@@ -31,7 +37,7 @@ const PIECE_IMAGES: Record<string, string> = {
 
 const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({ 
   fen, 
-  bestMove, 
+  bestMoves = [], 
   lastOpponentMove,
   orientation = 'white', 
   onManualMove 
@@ -51,11 +57,6 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
       return new Chess();
     }
   }, [fen]);
-
-  const bestMoveSquares = useMemo(() => {
-    if (!bestMove || bestMove.length < 4) return { from: null, to: null };
-    return { from: bestMove.slice(0, 2), to: bestMove.slice(2, 4) };
-  }, [bestMove]);
 
   const handleSquareClick = (squareId: string) => {
     if (!onManualMove) return;
@@ -90,8 +91,12 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
             const squareId = `${file}${rank}`;
             const piece = game.get(squareId as Square);
 
-            const isBestMoveFrom = bestMoveSquares.from === squareId;
-            const isBestMoveTo = bestMoveSquares.to === squareId;
+            // Determine if this square is part of any best move suggestion
+            const bestMoveRank = bestMoves.findIndex(m => m.from === squareId || m.to === squareId);
+            const moveAtThisSquare = bestMoves.find(m => m.from === squareId || m.to === squareId);
+            const isFrom = moveAtThisSquare?.from === squareId;
+            const isTo = moveAtThisSquare?.to === squareId;
+
             const isSelected = selectedSquare === squareId;
             const isPossibleMove = possibleMoves.includes(squareId);
             
@@ -102,12 +107,25 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
             return (
               <div 
                 key={squareId} 
-                className={`${isLight ? 'bg-[#334155]' : 'bg-[#1e293b]'} relative flex items-center justify-center cursor-pointer`}
+                className={`${isLight ? 'bg-[#334155]' : 'bg-[#1e293b]'} relative flex items-center justify-center cursor-pointer transition-colors duration-300`}
                 onClick={() => handleSquareClick(squareId)}
               >
                 {/* Visual Overlays for AI/Selection */}
-                {isBestMoveFrom && <div className="absolute inset-0 bg-blue-500/20" />}
-                {isBestMoveTo && <div className="absolute inset-0 bg-emerald-500/30 glow-emerald" />}
+                {/* Rank 0 (Best Move) - Stronger Highlight */}
+                {bestMoveRank === 0 && (
+                  <>
+                    {isFrom && <div className="absolute inset-0 bg-blue-500/30" />}
+                    {isTo && <div className="absolute inset-0 bg-emerald-500/40 glow-emerald border-2 border-emerald-400/50 z-10" />}
+                  </>
+                )}
+                
+                {/* Rank 1 (Second Best) - Subtle/Darker Highlight */}
+                {bestMoveRank === 1 && (
+                  <>
+                    {isFrom && <div className="absolute inset-0 bg-blue-500/10" />}
+                    {isTo && <div className="absolute inset-0 bg-emerald-700/30 border border-emerald-500/20 z-10" />}
+                  </>
+                )}
                 
                 {/* Opponent Last Move Overlays */}
                 {isOpponentFrom && <div className="absolute inset-0 bg-rose-500/20" />}
@@ -125,7 +143,7 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                   <img 
                     src={PIECE_IMAGES[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]} 
                     alt={piece.type} 
-                    className="w-[85%] h-[85%] object-contain z-10"
+                    className="w-[85%] h-[85%] object-contain z-20 pointer-events-none"
                   />
                 )}
               </div>
