@@ -15,16 +15,18 @@
     "chess.js": "^1.0.0-beta.8",
     "lucide-react": "^0.454.0",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "@google/genai": "^0.21.0"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.10",
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
-    "tailwindcss": "^3.4.14"
+    "tailwindcss": "^3.4.14",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
   }
 }

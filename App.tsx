@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { 
   Zap, RotateCcw, Activity, Settings2, Target, Clock, 
@@ -13,7 +12,6 @@ import { INITIAL_FEN } from './types';
 
 /**
  * VANGUARD PRECISION HUD
- * Enhanced with Opponent Move Tracking
  */
 
 export default function App() {
@@ -73,15 +71,19 @@ export default function App() {
         // Detect if this change was a move
         const move = detectMove(currentFen, result.fen);
         
-        // If it was the opponent's move (it's now user turn), highlight it
-        const newTurn = result.fen.split(' ')[1];
+        // Split FEN to get turn info
+        const fenParts = result.fen.split(' ');
+        const newTurn = fenParts[1];
+        
+        // isNowUserTurn means the opponent just moved
         const isNowUserTurn = (newTurn === 'w' && result.bottomColor === 'white') || 
                               (newTurn === 'b' && result.bottomColor === 'black');
         
         if (move && isNowUserTurn) {
+          // If a move happened and it's now our turn, it was the opponent's move
           setLastOpponentMove(move);
-        } else if (!isNowUserTurn) {
-          // If vision detects it is opponent turn again, clear highlights as user must have moved
+        } else {
+          // If it's no longer our turn, or we can't determine the move, clear highlights
           setLastOpponentMove(null);
         }
 
@@ -115,16 +117,20 @@ export default function App() {
     }
   }, [currentFen, isUserTurn]);
 
+  /**
+   * MANUAL MOVE HANDLER
+   * Triggers when the user interacts with the replica board.
+   */
   const handleManualMove = (from: string, to: string) => {
     try {
       const move = gameRef.current.move({ from, to, promotion: 'q' });
       if (move) {
         setCurrentFen(gameRef.current.fen());
-        // User responded: clear opponent highlight
+        // USER MOVE DETECTED: Clear opponent highlight immediately
         setLastOpponentMove(null);
       }
     } catch (e) {
-      console.warn("Manual Move: Invalid path.");
+      console.warn("Manual Move: Invalid path attempted.");
     }
   };
 

@@ -1,10 +1,8 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
  * VISION SERVICE (GEMINI IMPLEMENTATION)
  * PURPOSE: Analyzes a screenshot of a chess game and converts it to a FEN string.
- * Uses gemini-3-flash-preview for high-speed multimodal analysis.
  */
 
 export interface VisionResult {
@@ -13,9 +11,9 @@ export interface VisionResult {
 }
 
 export const analyzeBoardVision = async (base64Image: string): Promise<VisionResult> => {
-  // Use process.env.API_KEY directly as mandated by guidelines.
-  // The SDK client is initialized per-request to ensure the latest configuration is respected.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  // We strictly use the SDK initialization as required.
+  // Note: This requires a Google Gemini API Key.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
   
   try {
     const response = await ai.models.generateContent({
@@ -52,10 +50,10 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       },
     });
 
-    // Access the .text property directly (not a method) to retrieve the generated string.
+    // Accessing .text property directly as per coding guidelines.
     const jsonStr = response.text;
     if (!jsonStr) {
-      throw new Error("Empty response received from the Gemini model.");
+      throw new Error("Vanguard Internal: No response data received.");
     }
 
     return JSON.parse(jsonStr.trim()) as VisionResult;
