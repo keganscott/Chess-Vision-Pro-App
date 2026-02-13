@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (GEMINI IMPLEMENTATION)
- * PURPOSE: Analyzes a screenshot of a chess game and converts it to a FEN string.
+ * VISION SERVICE (CHESSVISIONX OPTIMIZED)
+ * PURPOSE: Robustly identifies the chess board within a potentially cluttered full-screen capture.
  */
 
 export interface VisionResult {
@@ -21,17 +21,21 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
       contents: {
         parts: [
           {
-            text: `You are a professional chess vision expert. 
-            TASK: 
-            1. Locate the active chess board in this screenshot.
-            2. Analyze every square from a1 to h8.
-            3. Identify the pieces: K=King, Q=Queen, R=Rook, B=Bishop, N=Knight, P=Pawn. 
-               Uppercase for White, Lowercase for Black. Use '/' for rank separators and numbers for empty squares.
-            4. Determine if the perspective at the bottom is 'white' or 'black'.
-            5. Determine whose turn it is (w/b) based on UI indicators like turn clocks or highlight colors. Default to 'w' if unclear.
-            6. Output a standard 6-part FEN string (e.g., 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1').
+            text: `You are the Vision Engine for ChessVisionX.
             
-            Return ONLY a JSON object.`
+            IMAGE CONTEXT: This is a full-screen screenshot which may include browser tabs, sidebars, and desktop UI.
+            
+            STRICT INSTRUCTIONS:
+            1. SCAN the image for the main 8x8 chess board. It is likely the largest square feature.
+            2. CROP MENTALLY: Ignore all elements outside the 8x8 board (no clocks, no chat, no browser URL).
+            3. PIECE IDENTIFICATION:
+               - White pieces (Uppercase): K, Q, R, B, N, P
+               - Black pieces (Lowercase): k, q, r, b, n, p
+            4. PERSPECTIVE: Identify if White or Black is at the bottom of the board.
+            5. TURN DETECTION: Look for highlight squares (often yellow/green) indicating the last move, or turn indicators next to avatars.
+            6. FEN OUTPUT: Construct a valid 6-part FEN. Ensure it represents exactly what is on the board.
+            
+            Format your response as valid JSON with "fen" and "bottomColor".`
           },
           {
             inlineData: {
@@ -48,11 +52,12 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
           properties: {
             fen: {
               type: Type.STRING,
-              description: 'The standard Forsyth-Edwards Notation (FEN). Must be valid and complete.',
+              description: 'The standard Forsyth-Edwards Notation string.',
             },
             bottomColor: {
               type: Type.STRING,
-              description: 'Color at bottom: "white" or "black".',
+              enum: ['white', 'black'],
+              description: 'The color perspective at the bottom of the screen.',
             },
           },
           required: ["fen", "bottomColor"],
@@ -61,22 +66,22 @@ export const analyzeBoardVision = async (base64Image: string): Promise<VisionRes
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response from Vision AI.");
+    if (!text) throw new Error("Empty response from Magnus Vision Core.");
 
     const result = JSON.parse(text.trim());
     
-    // Basic FEN validation: check for 8 ranks
+    // Validate FEN structure
     if (!result.fen || result.fen.split('/').length < 8) {
-        throw new Error("Invalid FEN format received.");
+      throw new Error("Invalid board mapping received.");
     }
 
     return result as VisionResult;
   } catch (error: any) {
-    console.error("Vanguard Vision Error:", error);
+    console.error("ChessVisionX Vision Error:", error);
     return { 
       fen: "", 
       bottomColor: 'white', 
-      error: error.message || "Unknown vision error" 
+      error: error.message || "Vision synchronization failed." 
     };
   }
 };
