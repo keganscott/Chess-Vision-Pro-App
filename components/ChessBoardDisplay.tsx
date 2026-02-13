@@ -72,7 +72,7 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
   const displayRanks = orientation === 'white' ? ranks : [...ranks].reverse();
 
   return (
-    <div className="aspect-square w-full bg-slate-900 rounded-xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-[8px] border-slate-800 select-none">
+    <div className="aspect-square w-full bg-slate-900 rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border-[10px] border-slate-800 select-none">
       <div className="grid grid-cols-8 grid-rows-8 w-full h-full relative">
         {displayRanks.map((rank, rankIndex) => (
           displayFiles.map((file, fileIndex) => {
@@ -80,17 +80,17 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
             const squareId = `${file}${rank}`;
             const piece = game.get(squareId as Square);
 
-            // BRIGHT Move #1
+            // HIGHLIGHT #1: Bright & Glowing
             const isBestMove1From = bestMoves[0]?.from === squareId;
             const isBestMove1To = bestMoves[0]?.to === squareId;
 
-            // DIM Move #2
+            // HIGHLIGHT #2: Dim & Muted
             const isBestMove2From = bestMoves[1]?.from === squareId;
             const isBestMove2To = bestMoves[1]?.to === squareId;
             
-            // Enemy Intensity Logic
-            const isEnemyFrom = lastOpponentMove?.from === squareId; // DIM
-            const isEnemyTo = lastOpponentMove?.to === squareId;     // BRIGHT
+            // ENEMY: From (Dim), To (Bright)
+            const isEnemyFrom = lastOpponentMove?.from === squareId;
+            const isEnemyTo = lastOpponentMove?.to === squareId;
 
             const isSelected = selectedSquare === squareId;
             const isPossibleMove = possibleMoves.includes(squareId);
@@ -101,31 +101,31 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                 className={`${isLight ? 'bg-[#334155]' : 'bg-[#1e293b]'} relative flex items-center justify-center cursor-pointer transition-all duration-300`}
                 onClick={() => handleSquareClick(squareId)}
               >
-                {/* BEST MOVE #1 (BRIGHT) */}
-                {isBestMove1From && <div className="absolute inset-0 bg-emerald-400/20" />}
-                {isBestMove1To && <div className="absolute inset-0 bg-emerald-500/60 shadow-[inset_0_0_20px_rgba(16,185,129,0.8)] border-2 border-emerald-400 animate-pulse z-10" />}
+                {/* BEST MOVE #1 - HIGH INTENSITY */}
+                {isBestMove1From && <div className="absolute inset-0 bg-emerald-400/25" />}
+                {isBestMove1To && <div className="absolute inset-0 bg-emerald-500/70 shadow-[inset_0_0_25px_rgba(16,185,129,0.9)] border-[3px] border-emerald-300/60 animate-pulse z-10" />}
 
-                {/* BEST MOVE #2 (DIM) */}
-                {isBestMove2From && <div className="absolute inset-0 bg-emerald-900/20" />}
-                {isBestMove2To && <div className="absolute inset-0 bg-emerald-800/30 border border-emerald-500/20 z-10" />}
+                {/* BEST MOVE #2 - LOW INTENSITY */}
+                {isBestMove2From && <div className="absolute inset-0 bg-emerald-950/20" />}
+                {isBestMove2To && <div className="absolute inset-0 bg-emerald-900/30 border border-emerald-500/10 z-10" />}
                 
-                {/* ENEMY MOVE (DIM FROM, BRIGHT TO) */}
-                {isEnemyFrom && <div className="absolute inset-0 bg-rose-900/10" />}
-                {isEnemyTo && <div className="absolute inset-0 bg-rose-500/40 shadow-[inset_0_0_15px_rgba(244,63,94,0.6)] border border-rose-400/50 z-10" />}
+                {/* ENEMY MOVEMENT - HIERARCHICAL */}
+                {isEnemyFrom && <div className="absolute inset-0 bg-rose-950/20" />}
+                {isEnemyTo && <div className="absolute inset-0 bg-rose-500/70 shadow-[inset_0_0_20px_rgba(244,63,94,0.7)] border-[2px] border-rose-400/40 z-10 animate-pulse" />}
                 
                 {isSelected && <div className="absolute inset-0 bg-amber-500/30 border border-amber-400/40" />}
                 {isPossibleMove && <div className="absolute w-2 h-2 bg-white/20 rounded-full" />}
 
                 {/* Coordinates */}
-                {fileIndex === 0 && <span className="absolute top-0.5 left-1 text-[7px] font-black text-slate-500 opacity-30">{rank}</span>}
-                {rankIndex === 7 && <span className="absolute bottom-0.5 right-1 text-[7px] font-black text-slate-500 opacity-30">{file.toUpperCase()}</span>}
+                {fileIndex === 0 && <span className="absolute top-0.5 left-1 text-[7px] font-black text-slate-500 opacity-20">{rank}</span>}
+                {rankIndex === 7 && <span className="absolute bottom-0.5 right-1 text-[7px] font-black text-slate-500 opacity-20">{file.toUpperCase()}</span>}
 
                 {/* Pieces */}
                 {piece && (
                   <img 
                     src={PIECE_IMAGES[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]} 
                     alt={piece.type} 
-                    className="w-[85%] h-[85%] object-contain z-20 pointer-events-none drop-shadow-lg"
+                    className="w-[88%] h-[88%] object-contain z-20 pointer-events-none drop-shadow-2xl"
                   />
                 )}
               </div>

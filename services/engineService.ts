@@ -79,12 +79,23 @@ class StockfishEngine {
         evaluation = parseInt(cpValue) / 100;
       }
 
+      // Aggressive confidence calculation for % based display
+      // Sigmoid function mapped to 0-100%
+      // Higher sharpness (120) makes clear advantages look more confident (90%+)
+      let confidence = 0;
+      if (mateValue) {
+        confidence = 100;
+      } else {
+        const score = evaluation * 100;
+        confidence = Math.round(100 / (1 + Math.exp(-score / 120)));
+      }
+
       const move: EngineMove = {
         from: uciMove.slice(0, 2).toUpperCase(),
         to: uciMove.slice(2, 4).toUpperCase(),
         san: uciMove,
         evaluation: evaluation,
-        confidence: Math.round(100 / (1 + Math.exp(-(evaluation * 100) / 150)))
+        confidence: confidence
       };
 
       this.currentMoves.set(multiPv, move);
@@ -121,26 +132,16 @@ class StockfishEngine {
    * Immediately stops any current search and starts the new one.
    */
   public analyze(fen: string, callback: (result: EngineResult) => void) {
-    // If we are already analyzing this exact FEN, don't restart
     if (this.activeFen === fen) return;
 
-    // Reset state for the new FEN
     this.activeFen = fen;
     this.currentMoves.clear();
     this.onResultCallback = callback;
 
-    // Critical: Stop the engine immediately
     this.sendMessage('stop');
-    
-    // Clear any potential internal queue in the worker (standard protocol)
     this.sendMessage('ucinewgame');
     this.sendMessage('isready');
-    
-    // Set position and start new search
     this.sendMessage(`position fen ${fen}`);
-    
-    // "go depth 16" is quite fast. For even more responsiveness, we use "go depth 16 movetime 3000"
-    // ensuring we never exceed a 3s calculation window if depth is not reached.
     this.sendMessage('go depth 16 movetime 3000'); 
   }
 

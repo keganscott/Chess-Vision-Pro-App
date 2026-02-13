@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (MAGNUS VISION CORE 2.7)
- * PURPOSE: High-speed FEN extraction from screen captures.
+ * VISION SERVICE (MAGNUS VISION CORE 2.9)
+ * PURPOSE: Robust FEN extraction from screen captures.
  */
 
 export interface VisionResult {
@@ -19,9 +19,17 @@ export interface VisionResult {
 }
 
 export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean = false): Promise<VisionResult> => {
-  // Directly using injected key as per system requirements
+  // Always retrieve the latest key from the process environment
   const apiKey = process.env.API_KEY;
-  const ai = new GoogleGenAI({ apiKey: apiKey || "" });
+  if (!apiKey || apiKey === "undefined" || apiKey === "") {
+    return { 
+      fen: "", 
+      bottomColor: 'white', 
+      error: "API Key Not Detected. Please authorize via 'Connect API Key' in the top right header." 
+    };
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
   
   try {
     const response = await ai.models.generateContent({
@@ -29,16 +37,19 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
       contents: {
         parts: [
           {
-            text: `ACT AS: Magnus Vision Core 2.7.
-            TASK: Map the chess board state from this capture.
+            text: `ACT AS: Magnus Vision Core 2.9.
+            TASK: Map the real-time board from this capture.
             
-            STRICT RULES:
-            1. SCAN: Find the main 8x8 grid. Ignore external browser elements.
-            2. COORDINATES: Provide the bounding box [ymin, xmin, ymax, xmax] (0-1000).
-            3. PERSPECTIVE: Identify if "white" or "black" pieces are at the bottom.
-            4. FEN: Generate the complete FEN string. Double-check piece positions.
+            RULES:
+            1. SCAN: Focus exclusively on the 8x8 chess board.
+            2. COORDINATES: Provide the [ymin, xmin, ymax, xmax] of the 8x8 board square (0-1000).
+            3. PIECES: Identify every piece exactly. 
+               - White pieces are CAPITAL (K, Q, R, B, N, P).
+               - Black pieces are lowercase (k, q, r, b, n, p).
+            4. PERSPECTIVE: Identify which side is at the bottom (white or black).
+            5. FEN: Generate the complete 6-part FEN string.
             
-            OUTPUT: RETURN ONLY VALID JSON. NO MARKDOWN. NO CONVERSATION.`
+            OUTPUT: RETURN ONLY VALID JSON. NO MARKDOWN.`
           },
           {
             inlineData: {
@@ -72,22 +83,23 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
     });
 
     const rawText = response.text;
-    if (!rawText) throw new Error("Vision engine returned no data.");
+    if (!rawText) throw new Error("Neural core returned empty response.");
 
-    // Aggressive JSON extraction
     const match = rawText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("Neural output was not in JSON format.");
+    if (!match) throw new Error("Neural output format mismatch.");
     
     const result = JSON.parse(match[0]);
-    if (!result.fen) throw new Error("FEN mapping failed.");
+    if (!result.fen || result.fen.split('/').length < 8) {
+       throw new Error("Neural position incomplete.");
+    }
 
     return result as VisionResult;
   } catch (error: any) {
-    console.error("Vision Bridge Failure:", error);
+    console.error("Magnus Vision Error:", error);
     return { 
       fen: "", 
       bottomColor: 'white', 
-      error: error.message || "Mapping failure." 
+      error: error.message || "Vision bridge failure." 
     };
   }
 };
