@@ -4,17 +4,12 @@ import { Chess, Square } from 'chess.js';
 
 /**
  * CHESS BOARD REPLICA COMPONENT
- * PURPOSE: Renders a visual representation of the game state.
- * FEATURES:
- * - High-quality SVG piece rendering.
- * - Best Move Highlighting (Blue for source, Emerald for target).
- * - Perspective flipping (Orientation).
- * - Manual move support via piece selection.
  */
 
 interface ChessBoardDisplayProps {
   fen: string;
   bestMove?: string;
+  lastOpponentMove?: { from: string; to: string } | null;
   orientation?: 'white' | 'black';
   onManualMove?: (from: string, to: string) => void;
 }
@@ -34,7 +29,13 @@ const PIECE_IMAGES: Record<string, string> = {
   'K': 'https://upload.wikimedia.org/wikipedia/commons/4/42/Chess_klt45.svg',
 };
 
-const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({ fen, bestMove, orientation = 'white', onManualMove }) => {
+const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({ 
+  fen, 
+  bestMove, 
+  lastOpponentMove,
+  orientation = 'white', 
+  onManualMove 
+}) => {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves, setPossibleMoves] = useState<string[]>([]);
 
@@ -50,8 +51,6 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({ fen, bestMove, or
       return new Chess();
     }
   }, [fen]);
-
-  const board = useMemo(() => game.board(), [game]);
 
   const bestMoveSquares = useMemo(() => {
     if (!bestMove || bestMove.length < 4) return { from: null, to: null };
@@ -95,6 +94,10 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({ fen, bestMove, or
             const isBestMoveTo = bestMoveSquares.to === squareId;
             const isSelected = selectedSquare === squareId;
             const isPossibleMove = possibleMoves.includes(squareId);
+            
+            // Opponent move highlights
+            const isOpponentFrom = lastOpponentMove?.from === squareId;
+            const isOpponentTo = lastOpponentMove?.to === squareId;
 
             return (
               <div 
@@ -105,6 +108,11 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({ fen, bestMove, or
                 {/* Visual Overlays for AI/Selection */}
                 {isBestMoveFrom && <div className="absolute inset-0 bg-blue-500/20" />}
                 {isBestMoveTo && <div className="absolute inset-0 bg-emerald-500/30 glow-emerald" />}
+                
+                {/* Opponent Last Move Overlays */}
+                {isOpponentFrom && <div className="absolute inset-0 bg-rose-500/20" />}
+                {isOpponentTo && <div className="absolute inset-0 bg-rose-500/30 animate-pulse border-2 border-rose-500/40" />}
+                
                 {isSelected && <div className="absolute inset-0 bg-amber-500/40" />}
                 {isPossibleMove && <div className="absolute w-3 h-3 bg-white/10 rounded-full" />}
 

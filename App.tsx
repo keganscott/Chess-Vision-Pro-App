@@ -12,23 +12,8 @@ import { analyzeBoardVision } from './services/visionService';
 import { INITIAL_FEN } from './types';
 
 /**
- * ============================================================================
- * VANGUARD PRECISION HUD: COMPONENT DOCUMENTATION
- * ============================================================================
- * 
- * 1. STATE MANAGEMENT:
- *    - currentFen: Holds the 'Ground Truth' of the game pieces.
- *    - boardOrientation: Controls the POV (Perspective) of the board replica.
- *    - engineResult: Stores the latest move calculations from Stockfish.
- * 
- * 2. SYNC ENGINE (Vision):
- *    - Every 2 seconds (Optimized), a frame is sent to visionService.
- *    - If the AI detects a change, currentFen is updated.
- * 
- * 3. ANALYSIS ENGINE (Stockfish):
- *    - Watches currentFen. When it changes, the engine starts calculating.
- *    - Works 100% locally using WASM; no API calls required for moves.
- * ============================================================================
+ * VANGUARD PRECISION HUD
+ * Enhanced with Opponent Move Tracking
  */
 
 export default function App() {
@@ -39,10 +24,13 @@ export default function App() {
   const [isVisionSyncing, setIsVisionSyncing] = useState(false);
   const [isAutoSyncEnabled, setIsAutoSyncEnabled] = useState(true);
   
+  // Track the opponent's last move to highlight it on the replica
+  const [lastOpponentMove, setLastOpponentMove] = useState<{ from: string; to: string } | null>(null);
+  
   const gameRef = useRef(new Chess(INITIAL_FEN));
   const visionCooldown = useRef<boolean>(false);
 
-  // Logic to determine if the local player (at the bottom of the screen) should move.
+  // Determine if it's the local user's turn
   const isUserTurn = useCallback(() => {
     const turn = currentFen.split(' ')[1]; 
     return (turn === 'w' && boardOrientation === 'white') || 
@@ -50,9 +38,23 @@ export default function App() {
   }, [currentFen, boardOrientation]);
 
   /**
-   * SECTION: VISION SYNC HANDLER
-   * Purpose: Listens to the screen capture and updates the board replica.
-   * Frequency: Optimized to 2.0s for better real-time feel.
+   * Detects the move made between two FEN strings
+   */
+  const detectMove = (oldFen: string, newFen: string) => {
+    const tempGame = new Chess(oldFen);
+    const moves = tempGame.moves({ verbose: true });
+    for (const move of moves) {
+      tempGame.move(move);
+      if (tempGame.fen() === newFen) {
+        return { from: move.from, to: move.to };
+      }
+      tempGame.undo();
+    }
+    return null;
+  };
+
+  /**
+   * VISION SYNC HANDLER
    */
   const handleFrameCapture = useCallback(async (base64: string) => {
     if (visionCooldown.current || !isAutoSyncEnabled) return;
@@ -63,13 +65,26 @@ export default function App() {
     try {
       const result = await analyzeBoardVision(base64);
       
-      // Auto-Flip orientation if AI sees the board differently
       if (result.bottomColor !== boardOrientation) {
         setBoardOrientation(result.bottomColor);
       }
 
-      // Update state if pieces have moved
       if (result.fen !== currentFen) {
+        // Detect if this change was a move
+        const move = detectMove(currentFen, result.fen);
+        
+        // If it was the opponent's move (it's now user turn), highlight it
+        const newTurn = result.fen.split(' ')[1];
+        const isNowUserTurn = (newTurn === 'w' && result.bottomColor === 'white') || 
+                              (newTurn === 'b' && result.bottomColor === 'black');
+        
+        if (move && isNowUserTurn) {
+          setLastOpponentMove(move);
+        } else if (!isNowUserTurn) {
+          // If vision detects it is opponent turn again, clear highlights as user must have moved
+          setLastOpponentMove(null);
+        }
+
         setCurrentFen(result.fen);
         gameRef.current = new Chess(result.fen);
       }
@@ -77,20 +92,17 @@ export default function App() {
       console.log("HUD Status: Vision processing in background...");
     } finally {
       setIsVisionSyncing(false);
-      // Optimized cooldown to 2 seconds for faster updates
       setTimeout(() => { visionCooldown.current = false; }, 2000);
     }
   }, [currentFen, boardOrientation, isAutoSyncEnabled]);
 
   /**
-   * SECTION: LOCAL ENGINE HANDLER
-   * Purpose: Calculates the best move for the digital board state.
+   * ENGINE CALCULATION
    */
   useEffect(() => {
     if (isUserTurn()) {
       setIsEngineThinking(true);
       engine.analyze(currentFen, (res) => {
-        // Double-check FEN matches to prevent race conditions
         if (res.fen === currentFen) {
           setEngineResult(res);
           setIsEngineThinking(false);
@@ -106,9 +118,13 @@ export default function App() {
   const handleManualMove = (from: string, to: string) => {
     try {
       const move = gameRef.current.move({ from, to, promotion: 'q' });
-      if (move) setCurrentFen(gameRef.current.fen());
+      if (move) {
+        setCurrentFen(gameRef.current.fen());
+        // User responded: clear opponent highlight
+        setLastOpponentMove(null);
+      }
     } catch (e) {
-      console.warn("Manual Move: Invalid path detected.");
+      console.warn("Manual Move: Invalid path.");
     }
   };
 
@@ -116,12 +132,11 @@ export default function App() {
     gameRef.current = new Chess(INITIAL_FEN);
     setCurrentFen(INITIAL_FEN);
     setEngineResult(null);
+    setLastOpponentMove(null);
   };
 
   return (
     <div className="h-screen bg-slate-950 text-slate-100 flex flex-col font-sans overflow-hidden">
-      
-      {/* HEADER: HUD Status Monitoring */}
       <header className="h-14 glass flex items-center justify-between px-6 border-b border-white/5 relative z-50">
         <div className="flex items-center gap-4">
           <div className="p-1.5 bg-emerald-500 rounded-md glow-emerald">
@@ -153,10 +168,7 @@ export default function App() {
       <main className="flex-1 p-6 grid grid-cols-12 gap-8 overflow-hidden relative">
         <div className="absolute inset-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] scale-150" />
 
-        {/* LEFT COMPONENT: VISION FEED AND MOVE HUD */}
         <div className="col-span-4 flex flex-col gap-6 overflow-hidden">
-          
-          {/* VIEWPORT: Real-time Screen Capture */}
           <div className="relative aspect-video glass rounded-2xl overflow-hidden shadow-2xl border border-slate-800/50">
              <CameraFeed 
                isAnalyzing={isAutoSyncEnabled} 
@@ -169,7 +181,6 @@ export default function App() {
              </div>
           </div>
 
-          {/* HUD: Best Move Selection (Sorted by Confidence) */}
           <div className="flex-1 glass rounded-2xl p-6 flex flex-col gap-5 overflow-hidden shadow-2xl border border-white/5">
              <div className="flex items-center justify-between border-b border-white/5 pb-4">
                <div className="flex items-center gap-2">
@@ -211,7 +222,6 @@ export default function App() {
                )}
              </div>
 
-             {/* HUD CONTROLS */}
              <div className="mt-auto flex items-center gap-4 pt-4 border-t border-white/5">
                <button onClick={handleReset} className="flex-1 py-3 bg-slate-900 hover:bg-slate-800 rounded-xl text-[10px] font-black uppercase border border-slate-800 text-slate-400">
                  Reset HUD
@@ -226,10 +236,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* RIGHT COMPONENT: INTERACTIVE DIGITAL REPLICA */}
         <div className="col-span-8 flex items-center justify-center glass rounded-3xl p-10 border border-white/5 shadow-2xl relative overflow-hidden">
-          
-          {/* ADVANTAGE METER: Positioned Advantage (White vs Black) */}
           <div className="absolute left-10 top-1/2 -translate-y-1/2 h-[75%] flex flex-col items-center gap-3">
              <div className="w-2.5 h-full bg-slate-900/80 rounded-full overflow-hidden flex flex-col-reverse border border-white/5">
                 <div 
@@ -256,11 +263,11 @@ export default function App() {
                </button>
             </div>
 
-            {/* BOARD DISPLAY: SVG Powered rendering engine */}
             <div className="w-full relative shadow-[0_40px_100px_rgba(0,0,0,0.6)]">
               <ChessBoardDisplay 
                 fen={currentFen} 
                 bestMove={engineResult?.moves[0]?.san} 
+                lastOpponentMove={lastOpponentMove}
                 orientation={boardOrientation} 
                 onManualMove={handleManualMove} 
               />
