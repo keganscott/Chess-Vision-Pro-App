@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (MAGNUS VISION CORE 3.3)
- * Optimized for Ultra-Fast Neural Syncing
+ * VISION SERVICE (MAGNUS VISION CORE 3.5)
+ * Optimized for High-Frequency Neural Streaming
  */
 
 export interface VisionResult {
@@ -18,10 +18,6 @@ export interface VisionResult {
   error?: string;
 }
 
-/**
- * FEN HEALER (v3.3)
- * Rapidly ensures a valid 6-part string.
- */
 const forceValidFen = (raw: string): string => {
   if (!raw || raw.trim().length === 0) return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   let clean = raw.trim().split(/\s+/);
@@ -37,11 +33,7 @@ const forceValidFen = (raw: string): string => {
 export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean = false): Promise<VisionResult> => {
   const apiKey = process.env.API_KEY;
   if (!apiKey || apiKey === "undefined" || apiKey === "") {
-    return { 
-      fen: "", 
-      bottomColor: 'white', 
-      error: "No active API Key." 
-    };
+    return { fen: "", bottomColor: 'white', error: "API Key Required" };
   }
 
   const ai = new GoogleGenAI({ apiKey });
@@ -52,12 +44,9 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
       contents: {
         parts: [
           {
-            text: `TURBO SYNC: Capture exact board state. 
-            RETURN: 
-            1. FEN (6-part string). 
-            2. bottomColor (perspective). 
-            3. boundingBox [ymin, xmin, ymax, xmax] (0-1000).
-            JSON ONLY.`
+            text: `TASK: Board State Extraction.
+            JSON: { "fen": "6-part FEN string", "bottomColor": "white"|"black", "boundingBox": [ymin,xmin,ymax,xmax] }
+            Rules: High accuracy pieces. Perspective detection required.`
           },
           {
             inlineData: {
@@ -90,23 +79,10 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
       },
     });
 
-    const rawText = response.text;
-    if (!rawText) throw new Error("Latency timeout.");
-
-    const match = rawText.match(/\{[\s\S]*\}/);
-    if (!match) throw new Error("JSON miss.");
-    
-    const result = JSON.parse(match[0]);
+    const result = JSON.parse(response.text || '{}');
     result.fen = forceValidFen(result.fen);
-
-    if (result.fen.split('/').length < 8) throw new Error("Piece mapping failed.");
-
     return result as VisionResult;
   } catch (error: any) {
-    return { 
-      fen: "", 
-      bottomColor: 'white', 
-      error: error.message || "Bridge failure." 
-    };
+    return { fen: "", bottomColor: 'white', error: "Sync Latency Fault" };
   }
 };
