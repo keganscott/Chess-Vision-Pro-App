@@ -3,7 +3,7 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Monitor, AlertCircle, Maximize, Target } from 'lucide-react';
 
 /**
- * SCREEN CAPTURE COMPONENT (SMART CROP)
+ * SCREEN CAPTURE COMPONENT (TURBO SYNC OPTIMIZED)
  */
 
 interface CameraFeedProps {
@@ -87,8 +87,9 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ onCaptureFrame, isAnalyzing, on
   }, [onCaptureFrame, stream, crop]);
 
   useEffect(() => {
+    // HIGH FREQUENCY POLLING (1000ms)
     if (isAnalyzing && stream) {
-      intervalRef.current = window.setInterval(captureFrame, 2500);
+      intervalRef.current = window.setInterval(captureFrame, 1000);
     } else if (intervalRef.current) {
       window.clearInterval(intervalRef.current);
     }
@@ -104,12 +105,11 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ onCaptureFrame, isAnalyzing, on
         playsInline 
       />
       
-      {/* Visual Indicator of the Cropped Board */}
       {stream && crop && (
          <div className="relative w-full h-full flex items-center justify-center p-4">
             <canvas ref={canvasRef} className="w-full h-full max-w-full max-h-full object-contain rounded-lg border border-blue-500/30 shadow-[0_0_20px_rgba(59,130,246,0.2)]" />
             <div className="absolute top-6 right-6 px-3 py-1 bg-blue-600/90 rounded text-[8px] font-black text-white uppercase flex items-center gap-1.5 shadow-lg">
-               <Target className="w-3 h-3" /> Focus Locked
+               <Target className="w-3 h-3" /> Turbo Focus
             </div>
          </div>
       )}
@@ -131,7 +131,7 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ onCaptureFrame, isAnalyzing, on
              onClick={startCapture} 
              className="px-10 py-5 bg-blue-600 text-white text-[11px] font-black uppercase tracking-[0.2em] rounded-xl hover:bg-blue-500 active:scale-95 transition-all shadow-2xl shadow-blue-900/40 border border-blue-400/20"
            >
-             Initialize Feed
+             Activate Neural Stream
            </button>
         </div>
       )}

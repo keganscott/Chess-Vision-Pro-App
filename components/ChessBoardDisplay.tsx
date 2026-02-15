@@ -47,6 +47,12 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
     }
   }, [fen]);
 
+  // Determine if it is the Enemy's turn to move based on orientation
+  const isEnemyTurn = useMemo(() => {
+    const turn = game.turn(); // 'w' or 'b'
+    return (orientation === 'white' && turn === 'b') || (orientation === 'black' && turn === 'w');
+  }, [game, orientation]);
+
   const handleSquareClick = (squareId: string) => {
     if (!onManualMove) return;
     if (selectedSquare && possibleMoves.includes(squareId)) {
@@ -72,7 +78,7 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
   const displayRanks = orientation === 'white' ? ranks : [...ranks].reverse();
 
   return (
-    <div className="aspect-square w-full bg-slate-900 rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border-[10px] border-slate-800 select-none">
+    <div className={`aspect-square w-full bg-slate-900 rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border-[10px] select-none transition-colors duration-500 ${isEnemyTurn ? 'border-rose-900/40' : 'border-slate-800'}`}>
       <div className="grid grid-cols-8 grid-rows-8 w-full h-full relative">
         {displayRanks.map((rank, rankIndex) => (
           displayFiles.map((file, fileIndex) => {
@@ -80,7 +86,7 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
             const squareId = `${file}${rank}`;
             const piece = game.get(squareId as Square);
 
-            // HIGHLIGHT #1: Bright & Glowing
+            // HIGHLIGHT #1: Bright & Glowing (Threat or Opportunity)
             const isBestMove1From = bestMoves[0]?.from === squareId;
             const isBestMove1To = bestMoves[0]?.to === squareId;
 
@@ -101,17 +107,23 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                 className={`${isLight ? 'bg-[#334155]' : 'bg-[#1e293b]'} relative flex items-center justify-center cursor-pointer transition-all duration-300`}
                 onClick={() => handleSquareClick(squareId)}
               >
-                {/* BEST MOVE #1 - HIGH INTENSITY */}
-                {isBestMove1From && <div className="absolute inset-0 bg-emerald-400/25" />}
-                {isBestMove1To && <div className="absolute inset-0 bg-emerald-500/70 shadow-[inset_0_0_25px_rgba(16,185,129,0.9)] border-[3px] border-emerald-300/60 animate-pulse z-10" />}
+                {/* BEST MOVE #1 - CONTEXT AWARE COLORING */}
+                {isBestMove1From && <div className={`absolute inset-0 ${isEnemyTurn ? 'bg-rose-500/25' : 'bg-emerald-400/25'}`} />}
+                {isBestMove1To && (
+                  <div className={`absolute inset-0 border-[3px] animate-pulse z-10 
+                    ${isEnemyTurn 
+                      ? 'bg-rose-500/60 shadow-[inset_0_0_25px_rgba(244,63,94,0.9)] border-rose-300/60' 
+                      : 'bg-emerald-500/70 shadow-[inset_0_0_25px_rgba(16,185,129,0.9)] border-emerald-300/60'}`} 
+                  />
+                )}
 
                 {/* BEST MOVE #2 - LOW INTENSITY */}
-                {isBestMove2From && <div className="absolute inset-0 bg-emerald-950/20" />}
-                {isBestMove2To && <div className="absolute inset-0 bg-emerald-900/30 border border-emerald-500/10 z-10" />}
+                {isBestMove2From && <div className={`absolute inset-0 ${isEnemyTurn ? 'bg-rose-950/20' : 'bg-emerald-950/20'}`} />}
+                {isBestMove2To && <div className={`absolute inset-0 border z-10 ${isEnemyTurn ? 'bg-rose-900/30 border-rose-500/10' : 'bg-emerald-900/30 border-emerald-500/10'}`} />}
                 
-                {/* ENEMY MOVEMENT - HIERARCHICAL */}
-                {isEnemyFrom && <div className="absolute inset-0 bg-rose-950/20" />}
-                {isEnemyTo && <div className="absolute inset-0 bg-rose-500/70 shadow-[inset_0_0_20px_rgba(244,63,94,0.7)] border-[2px] border-rose-400/40 z-10 animate-pulse" />}
+                {/* ENEMY MOVEMENT HISTORY (Last Move) */}
+                {isEnemyFrom && <div className="absolute inset-0 bg-indigo-500/40" />}
+                {isEnemyTo && <div className="absolute inset-0 bg-indigo-500/40 shadow-[inset_0_0_20px_rgba(99,102,241,0.5)] z-10" />}
                 
                 {isSelected && <div className="absolute inset-0 bg-amber-500/30 border border-amber-400/40" />}
                 {isPossibleMove && <div className="absolute w-2 h-2 bg-white/20 rounded-full" />}

@@ -1,7 +1,5 @@
 {
-  "requestFramePermissions": [
-    "camera"
-  ],
-  "name": "",
+  "requestFramePermissions": [],
+  "name": "ChessVisionX",
   "description": ""
 }
