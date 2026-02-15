@@ -1,8 +1,8 @@
 
 /**
- * ENGINE SERVICE (OPTIMIZED)
- * PURPOSE: Manages local Stockfish 16.1 WASM with robust interruption handling.
- * Optimized for rapid FEN changes: cancels previous work and discards stale results.
+ * ENGINE SERVICE (ASSAULT MODE 3.6)
+ * PURPOSE: Manages Stockfish with aggressive tactical settings.
+ * Optimized for rapid FEN changes and high-pressure tactical play.
  */
 
 export interface EngineMove {
@@ -17,10 +17,9 @@ export interface EngineResult {
   moves: EngineMove[];
   nodes: number;
   depth: number;
-  fen: string; // Added to track which FEN this result belongs to
+  fen: string;
 }
 
-// Using a slightly newer/faster Stockfish build if available, but staying stable with 10.0.2 for compatibility
 const STOCKFISH_URL = 'https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js';
 
 class StockfishEngine {
@@ -29,7 +28,7 @@ class StockfishEngine {
   private currentMoves: Map<number, EngineMove> = new Map();
   private lastNodes: number = 0;
   private lastDepth: number = 0;
-  private activeFen: string = ''; // Track the current FEN being analyzed
+  private activeFen: string = '';
 
   constructor() {
     this.init();
@@ -42,20 +41,19 @@ class StockfishEngine {
       this.worker.onmessage = (e) => {
         const line = e.data;
         if (typeof line !== 'string') return;
-
-        if (line.startsWith('info depth')) {
-          this.parseInfoLine(line);
-        }
+        if (line.startsWith('info depth')) this.parseInfoLine(line);
       };
 
       this.sendMessage('uci');
       this.sendMessage('isready');
       this.sendMessage('setoption name Skill Level value 20');
       this.sendMessage('setoption name MultiPV value 2');
-      this.sendMessage('setoption name Threads value 4'); // Speed up calculation
-      this.sendMessage('setoption name Hash value 32');  // Allocate small hash for web
+      // ASSAULT CONFIG: High Contempt forces the bot to avoid draws and play for the win at all costs
+      this.sendMessage('setoption name Contempt value 100'); 
+      this.sendMessage('setoption name Threads value 4');
+      this.sendMessage('setoption name Hash value 64');
     } catch (e) {
-      console.error("Stockfish Init Error:", e);
+      console.error("Engine failure:", e);
     }
   }
 
@@ -67,11 +65,8 @@ class StockfishEngine {
     const cpValue = this.extractValue(line, 'cp');
     const mateValue = this.extractValue(line, 'mate');
 
-    // Depth check: we only start reporting results once we have meaningful depth
     if (pv && depth >= 6) {
       const uciMove = pv.split(' ')[0];
-      
-      // Calculate evaluation (handling mate scores)
       let evaluation = 0;
       if (mateValue) {
         evaluation = parseInt(mateValue) > 0 ? 99 : -99;
@@ -79,15 +74,13 @@ class StockfishEngine {
         evaluation = parseInt(cpValue) / 100;
       }
 
-      // Aggressive confidence calculation for % based display
-      // Sigmoid function mapped to 0-100%
-      // Higher sharpness (120) makes clear advantages look more confident (90%+)
       let confidence = 0;
       if (mateValue) {
         confidence = 100;
       } else {
         const score = evaluation * 100;
-        confidence = Math.round(100 / (1 + Math.exp(-score / 120)));
+        // Sharpened sigmoid to make tactical advantages feel more decisive
+        confidence = Math.round(100 / (1 + Math.exp(-score / 100)));
       }
 
       const move: EngineMove = {
@@ -127,22 +120,14 @@ class StockfishEngine {
     this.worker?.postMessage(msg);
   }
 
-  /**
-   * analyze() - Optimized for rapid FEN changes.
-   * Immediately stops any current search and starts the new one.
-   */
   public analyze(fen: string, callback: (result: EngineResult) => void) {
     if (this.activeFen === fen) return;
-
     this.activeFen = fen;
     this.currentMoves.clear();
     this.onResultCallback = callback;
-
     this.sendMessage('stop');
-    this.sendMessage('ucinewgame');
-    this.sendMessage('isready');
     this.sendMessage(`position fen ${fen}`);
-    this.sendMessage('go depth 16 movetime 3000'); 
+    this.sendMessage('go depth 18 movetime 2500'); 
   }
 
   public stop() {
