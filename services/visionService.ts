@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 /**
- * VISION SERVICE (MAGNUS VISION CORE 3.5)
- * Optimized for High-Frequency Neural Streaming
+ * VISION SERVICE (MAGNUS VISION CORE 4.0 - ASSAULT)
+ * Optimized for High-Precision Pixel Mapping and Grid Verification
  */
 
 export interface VisionResult {
@@ -20,13 +20,25 @@ export interface VisionResult {
 
 const forceValidFen = (raw: string): string => {
   if (!raw || raw.trim().length === 0) return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-  let clean = raw.trim().split(/\s+/);
-  const board = clean[0] || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
-  const turn = clean[1] || "w";
-  const castling = clean[2] || "KQkq";
-  const ep = clean[3] || "-";
-  const half = clean[4] || "0";
-  const full = clean[5] || "1";
+  
+  // Basic validation to prevent game-breaking board states
+  const parts = raw.trim().split(/\s+/);
+  const board = parts[0] || "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR";
+  
+  // Count kings - if AI hallucinations occur, we force a reset to prevent errors
+  const whiteKings = (board.match(/K/g) || []).length;
+  const blackKings = (board.match(/k/g) || []).length;
+  
+  if (whiteKings !== 1 || blackKings !== 1) {
+    return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+  }
+
+  const turn = parts[1] || "w";
+  const castling = parts[2] || "KQkq";
+  const ep = parts[3] || "-";
+  const half = parts[4] || "0";
+  const full = parts[5] || "1";
+  
   return `${board} ${turn} ${castling} ${ep} ${half} ${full}`;
 };
 
@@ -44,9 +56,18 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
       contents: {
         parts: [
           {
-            text: `TASK: Board State Extraction.
-            JSON: { "fen": "6-part FEN string", "bottomColor": "white"|"black", "boundingBox": [ymin,xmin,ymax,xmax] }
-            Rules: High accuracy pieces. Perspective detection required.`
+            text: `PRECISION CHESS EXTRACTION (ASSAULT 4.0)
+            1. Find the 8x8 chess board (Chess.com/Lichess style).
+            2. Identify every piece with 100% accuracy. Empty squares are digit numbers.
+            3. Detect perspective: Which color is at the bottom?
+            4. Detect turn: Based on last move highlights if visible.
+            
+            OUTPUT: Strict JSON only.
+            {
+              "fen": "full_fen_string",
+              "bottomColor": "white"|"black",
+              "boundingBox": {"ymin": 0, "xmin": 0, "ymax": 1000, "xmax": 1000}
+            }`
           },
           {
             inlineData: {
@@ -79,10 +100,18 @@ export const analyzeBoardVision = async (base64Image: string, needsCrop: boolean
       },
     });
 
-    const result = JSON.parse(response.text || '{}');
+    const text = response.text || '{}';
+    const result = JSON.parse(text);
+    
+    // Safety check for empty or malformed FEN
+    if (!result.fen || result.fen.length < 15) {
+       throw new Error("Neural Blur: Incomplete Board Detected");
+    }
+
     result.fen = forceValidFen(result.fen);
     return result as VisionResult;
   } catch (error: any) {
-    return { fen: "", bottomColor: 'white', error: "Sync Latency Fault" };
+    console.error("Vision Bridge Failure:", error);
+    return { fen: "", bottomColor: 'white', error: error.message || "Sync Latency Fault" };
   }
 };

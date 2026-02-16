@@ -1,9 +1,9 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Chess, Square } from 'chess.js';
 
 /**
- * CHESS BOARD REPLICA COMPONENT (HUD OPTIMIZED)
+ * CHESS BOARD REPLICA COMPONENT (ADAPTIVE SCALE)
  */
 
 interface ChessBoardDisplayProps {
@@ -47,9 +47,8 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
     }
   }, [fen]);
 
-  // Determine if it is the Enemy's turn to move based on orientation
   const isEnemyTurn = useMemo(() => {
-    const turn = game.turn(); // 'w' or 'b'
+    const turn = game.turn();
     return (orientation === 'white' && turn === 'b') || (orientation === 'black' && turn === 'w');
   }, [game, orientation]);
 
@@ -78,7 +77,7 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
   const displayRanks = orientation === 'white' ? ranks : [...ranks].reverse();
 
   return (
-    <div className={`aspect-square w-full bg-slate-900 rounded-xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.7)] border-[10px] select-none transition-colors duration-500 ${isEnemyTurn ? 'border-rose-900/40' : 'border-slate-800'}`}>
+    <div className={`w-full h-full bg-slate-900 rounded-lg overflow-hidden border-4 select-none transition-colors duration-500 shadow-inner ${isEnemyTurn ? 'border-rose-900/40' : 'border-slate-800'}`}>
       <div className="grid grid-cols-8 grid-rows-8 w-full h-full relative">
         {displayRanks.map((rank, rankIndex) => (
           displayFiles.map((file, fileIndex) => {
@@ -86,18 +85,12 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
             const squareId = `${file}${rank}`;
             const piece = game.get(squareId as Square);
 
-            // HIGHLIGHT #1: Bright & Glowing (Threat or Opportunity)
             const isBestMove1From = bestMoves[0]?.from === squareId;
             const isBestMove1To = bestMoves[0]?.to === squareId;
-
-            // HIGHLIGHT #2: Dim & Muted
             const isBestMove2From = bestMoves[1]?.from === squareId;
             const isBestMove2To = bestMoves[1]?.to === squareId;
-            
-            // ENEMY: From (Dim), To (Bright)
             const isEnemyFrom = lastOpponentMove?.from === squareId;
             const isEnemyTo = lastOpponentMove?.to === squareId;
-
             const isSelected = selectedSquare === squareId;
             const isPossibleMove = possibleMoves.includes(squareId);
 
@@ -107,37 +100,26 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                 className={`${isLight ? 'bg-[#334155]' : 'bg-[#1e293b]'} relative flex items-center justify-center cursor-pointer transition-all duration-300`}
                 onClick={() => handleSquareClick(squareId)}
               >
-                {/* BEST MOVE #1 - CONTEXT AWARE COLORING */}
-                {isBestMove1From && <div className={`absolute inset-0 ${isEnemyTurn ? 'bg-rose-500/25' : 'bg-emerald-400/25'}`} />}
-                {isBestMove1To && (
-                  <div className={`absolute inset-0 border-[3px] animate-pulse z-10 
-                    ${isEnemyTurn 
-                      ? 'bg-rose-500/60 shadow-[inset_0_0_25px_rgba(244,63,94,0.9)] border-rose-300/60' 
-                      : 'bg-emerald-500/70 shadow-[inset_0_0_25px_rgba(16,185,129,0.9)] border-emerald-300/60'}`} 
-                  />
-                )}
+                {/* Visual Highlights */}
+                {isBestMove1From && <div className="absolute inset-0 bg-rose-500/20" />}
+                {isBestMove1To && <div className="absolute inset-0 border-[2px] animate-pulse z-10 bg-rose-500/40 border-rose-400/60 shadow-[inset_0_0_15px_rgba(244,63,94,0.5)]" />}
+                {isBestMove2From && <div className="absolute inset-0 bg-rose-950/20" />}
+                {isBestMove2To && <div className="absolute inset-0 border z-10 bg-rose-900/20 border-rose-500/10" />}
+                {isEnemyFrom && <div className="absolute inset-0 bg-indigo-500/30" />}
+                {isEnemyTo && <div className="absolute inset-0 bg-indigo-500/30 shadow-[inset_0_0_15px_rgba(99,102,241,0.4)] z-10" />}
+                {isSelected && <div className="absolute inset-0 bg-amber-500/20 border border-amber-400/30" />}
+                {isPossibleMove && <div className="absolute w-1.5 h-1.5 bg-white/30 rounded-full" />}
 
-                {/* BEST MOVE #2 - LOW INTENSITY */}
-                {isBestMove2From && <div className={`absolute inset-0 ${isEnemyTurn ? 'bg-rose-950/20' : 'bg-emerald-950/20'}`} />}
-                {isBestMove2To && <div className={`absolute inset-0 border z-10 ${isEnemyTurn ? 'bg-rose-900/30 border-rose-500/10' : 'bg-emerald-900/30 border-emerald-500/10'}`} />}
-                
-                {/* ENEMY MOVEMENT HISTORY (Last Move) */}
-                {isEnemyFrom && <div className="absolute inset-0 bg-indigo-500/40" />}
-                {isEnemyTo && <div className="absolute inset-0 bg-indigo-500/40 shadow-[inset_0_0_20px_rgba(99,102,241,0.5)] z-10" />}
-                
-                {isSelected && <div className="absolute inset-0 bg-amber-500/30 border border-amber-400/40" />}
-                {isPossibleMove && <div className="absolute w-2 h-2 bg-white/20 rounded-full" />}
+                {/* Rank/File Labels */}
+                {fileIndex === 0 && <span className="absolute top-0.5 left-0.5 text-[6px] font-black text-white/10">{rank}</span>}
+                {rankIndex === 7 && <span className="absolute bottom-0.5 right-0.5 text-[6px] font-black text-white/10">{file.toUpperCase()}</span>}
 
-                {/* Coordinates */}
-                {fileIndex === 0 && <span className="absolute top-0.5 left-1 text-[7px] font-black text-slate-500 opacity-20">{rank}</span>}
-                {rankIndex === 7 && <span className="absolute bottom-0.5 right-1 text-[7px] font-black text-slate-500 opacity-20">{file.toUpperCase()}</span>}
-
-                {/* Pieces */}
+                {/* Piece Rendering */}
                 {piece && (
                   <img 
                     src={PIECE_IMAGES[piece.color === 'w' ? piece.type.toUpperCase() : piece.type]} 
                     alt={piece.type} 
-                    className="w-[88%] h-[88%] object-contain z-20 pointer-events-none drop-shadow-2xl"
+                    className="w-[85%] h-[85%] object-contain z-20 pointer-events-none drop-shadow-xl"
                   />
                 )}
               </div>
