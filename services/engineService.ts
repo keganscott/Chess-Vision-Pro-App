@@ -29,6 +29,7 @@ class StockfishEngine {
   private lastNodes: number = 0;
   private lastDepth: number = 0;
   private activeFen: string = '';
+  private pendingResult: EngineResult | null = null;
 
   constructor() {
     this.init();
@@ -41,13 +42,19 @@ class StockfishEngine {
       this.worker.onmessage = (e) => {
         const line = e.data;
         if (typeof line !== 'string') return;
-        if (line.startsWith('info depth')) this.parseInfoLine(line);
+        
+        // Parse info for evaluation scores but wait for 'bestmove' to fire the callback
+        if (line.startsWith('info depth')) {
+          this.parseInfoLine(line);
+        } else if (line.startsWith('bestmove')) {
+          this.handleBestMove(line);
+        }
       };
 
       this.sendMessage('uci');
       this.sendMessage('isready');
       this.sendMessage('setoption name Skill Level value 20');
-      this.sendMessage('setoption name MultiPV value 2');
+      this.sendMessage('setoption name MultiPV value 1'); // Changed to 1 to only show the absolute best move
       // ASSAULT CONFIG: High Contempt forces the bot to avoid draws and play for the win at all costs
       this.sendMessage('setoption name Contempt value 100'); 
       this.sendMessage('setoption name Threads value 4');
@@ -58,6 +65,9 @@ class StockfishEngine {
   }
 
   private parseInfoLine(line: string) {
+    // Early exit for lines that don't contain PV (Principal Variation) info to save main-thread parsing time
+    if (!line.includes(' pv ')) return;
+
     const depth = parseInt(this.extractValue(line, 'depth') || '0');
     const nodes = parseInt(this.extractValue(line, 'nodes') || '0');
     const pv = this.extractValue(line, 'pv');
@@ -95,17 +105,27 @@ class StockfishEngine {
       this.lastNodes = nodes;
       this.lastDepth = depth;
 
-      if (this.onResultCallback) {
-        const sortedMoves = Array.from(this.currentMoves.entries())
-          .sort(([a], [b]) => a - b)
-          .map(([_, m]) => m);
+      const sortedMoves = Array.from(this.currentMoves.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([_, m]) => m);
 
-        this.onResultCallback({
-          moves: sortedMoves,
-          nodes: this.lastNodes,
-          depth: this.lastDepth,
-          fen: this.activeFen
-        });
+      // Store the result but do NOT fire the callback yet
+      this.pendingResult = {
+        moves: sortedMoves,
+        nodes: this.lastNodes,
+        depth: this.lastDepth,
+        fen: this.activeFen
+      };
+    }
+  }
+
+  private handleBestMove(line: string) {
+    // line looks like: "bestmove e2e4 ponder e7e6"
+    const parts = line.split(' ');
+    if (parts.length >= 2 && parts[1] !== '(none)') {
+      if (this.onResultCallback && this.pendingResult) {
+        // We have the final move, now we can update the UI
+        this.onResultCallback(this.pendingResult);
       }
     }
   }
@@ -124,10 +144,12 @@ class StockfishEngine {
     if (this.activeFen === fen) return;
     this.activeFen = fen;
     this.currentMoves.clear();
+    this.pendingResult = null;
     this.onResultCallback = callback;
     this.sendMessage('stop');
     this.sendMessage(`position fen ${fen}`);
-    this.sendMessage('go depth 18 movetime 2500'); 
+    // 1.5 seconds is enough to think, prevents long flashing delays
+    this.sendMessage('go movetime 1500'); 
   }
 
   public stop() {

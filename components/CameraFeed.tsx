@@ -69,24 +69,27 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ onCaptureFrame, isAnalyzing, on
       const v = videoRef.current;
       const c = canvasRef.current;
 
-      // Higher internal resolution for AI precision (1024px)
+      // Limit max dimension to reduce main-thread encoding time
+      const MAX_DIM = 800;
+
       if (crop) {
         const sx = (crop.xmin / 1000) * v.videoWidth;
         const sy = (crop.ymin / 1000) * v.videoHeight;
         const sw = ((crop.xmax - crop.xmin) / 1000) * v.videoWidth;
         const sh = ((crop.ymax - crop.ymin) / 1000) * v.videoHeight;
 
-        c.width = 1024;
-        c.height = 1024;
+        c.width = MAX_DIM;
+        c.height = MAX_DIM;
         ctx.drawImage(v, sx, sy, sw, sh, 0, 0, c.width, c.height);
       } else {
-        const scale = 0.75;
+        const scale = Math.min(1, MAX_DIM / Math.max(v.videoWidth, v.videoHeight));
         c.width = v.videoWidth * scale;
         c.height = v.videoHeight * scale;
         ctx.drawImage(v, 0, 0, c.width, c.height);
       }
       
-      const dataUrl = c.toDataURL('image/jpeg', 0.9);
+      // Lower quality to 0.6 to significantly improve capture performance
+      const dataUrl = c.toDataURL('image/jpeg', 0.6);
       const base64 = dataUrl.split(',')[1];
       if (base64) onCaptureFrame(base64);
     }
@@ -105,7 +108,7 @@ const CameraFeed: React.FC<CameraFeedProps> = ({ onCaptureFrame, isAnalyzing, on
     <div className="relative w-full h-full bg-slate-950 rounded-lg overflow-hidden flex items-center justify-center">
       <video 
         ref={videoRef} 
-        className={`absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-700 ${stream && !crop ? 'opacity-40' : 'opacity-0'}`} 
+        className={`absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-700 ${stream && !crop ? 'opacity-40' : 'hidden'}`} 
         muted 
         playsInline 
       />

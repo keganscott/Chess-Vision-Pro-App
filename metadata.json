@@ -1,5 +1,6 @@
 {
   "requestFramePermissions": [],
   "name": "ChessVisionX",
-  "description": ""
+  "description": "AI-powered Magnus Assault chess vision HUD with responsive iPad and mobile view support.",
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

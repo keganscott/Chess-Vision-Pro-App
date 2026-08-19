@@ -87,8 +87,6 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
 
             const isBestMove1From = bestMoves[0]?.from === squareId;
             const isBestMove1To = bestMoves[0]?.to === squareId;
-            const isBestMove2From = bestMoves[1]?.from === squareId;
-            const isBestMove2To = bestMoves[1]?.to === squareId;
             const isEnemyFrom = lastOpponentMove?.from === squareId;
             const isEnemyTo = lastOpponentMove?.to === squareId;
             const isSelected = selectedSquare === squareId;
@@ -101,10 +99,8 @@ const ChessBoardDisplay: React.FC<ChessBoardDisplayProps> = ({
                 onClick={() => handleSquareClick(squareId)}
               >
                 {/* Visual Highlights */}
-                {isBestMove1From && <div className="absolute inset-0 bg-rose-500/20" />}
-                {isBestMove1To && <div className="absolute inset-0 border-[2px] animate-pulse z-10 bg-rose-500/40 border-rose-400/60 shadow-[inset_0_0_15px_rgba(244,63,94,0.5)]" />}
-                {isBestMove2From && <div className="absolute inset-0 bg-rose-950/20" />}
-                {isBestMove2To && <div className="absolute inset-0 border z-10 bg-rose-900/20 border-rose-500/10" />}
+                {isBestMove1From && <div className="absolute inset-0 bg-rose-500/30" />}
+                {isBestMove1To && <div className="absolute inset-0 border-[3px] animate-pulse z-10 bg-rose-500/40 border-rose-400 shadow-[inset_0_0_20px_rgba(244,63,94,0.6)]" />}
                 {isEnemyFrom && <div className="absolute inset-0 bg-indigo-500/30" />}
                 {isEnemyTo && <div className="absolute inset-0 bg-indigo-500/30 shadow-[inset_0_0_15px_rgba(99,102,241,0.4)] z-10" />}
                 {isSelected && <div className="absolute inset-0 bg-amber-500/20 border border-amber-400/30" />}
